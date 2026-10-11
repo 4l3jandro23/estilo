@@ -263,3 +263,6 @@ details.blq li { margin: 8px 0; }
 .opinion p { margin: 6px 0 0; position: relative; }
 .veredicto-t { font: 800 18px var(--display); margin: 0 !important; }
 .veredicto-t.bien { color: var(--ok); } .veredicto-t.medio { color: var(--medio); } .veredicto-t.mal { color: var(--mal); }
+
+.rec { font-style: normal; color: var(--cuero); }
+.por-c { display: block; margin-top: 4px; background: var(--cuero-soft); color: var(--ink) !important; border-radius: 10px; padding: 6px 9px; font-size: 13.5px; line-height: 1.4; }

@@ -331,7 +331,7 @@ function vCompras() {
     <div class="row" style="margin:-4px 0 14px"><button class="pill" data-guia="tiendas">🛍️ Dónde comprar</button><button class="pill" data-guia="vender">♻️ Vender o donar</button></div>
     ${tope ? `<section class="card"><div class="row-h"><h2>Este mes</h2><small class="muted">${eur(gastado)} de ${eur(tope)}</small></div><div class="barra"><span style="width:${Math.min(100, gastado / tope * 100)}%" class="${gastado > tope ? 'pasa' : ''}"></span></div><p class="mini-t">${gastado > tope ? 'Te has pasado del presupuesto que pusiste. Nada grave: el mes que viene, más tranquilo.' : 'Según el presupuesto que pusiste en «Para mí».'}</p></section>` : ''}
     <section class="card"><h2>Mi lista</h2>
-      ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}" aria-label="Marcar como comprado"><span></span></button><span class="b"><b>${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small></span>${c.link ? `<a class="pill sm" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">Ver</a>` : ''}<button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía. Mira abajo lo que te falta.</p>'}
+      ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}" aria-label="Marcar como comprado"><span></span></button><span class="b"><b>${c.claude ? '<i class="rec" title="Recomendado por Claude">★</i> ' : ''}${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small>${c.por ? `<small class="por-c">${esc(c.por)}</small>` : ''}</span>${c.link ? `<a class="pill sm" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">Ver</a>` : ''}<button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía. Mira abajo lo que te falta.</p>'}
       <button class="pill" data-act="nuevacomp">＋ Añadir</button>
       ${hechas.length ? `<details class="sub-det"><summary>Comprado (${hechas.length})</summary>${hechas.slice(-15).reverse().map(c => `<div class="lrow hecha"><button class="chk ok" data-comp="${c.id}" aria-label="Desmarcar"><span></span></button><span class="b"><b>${esc(c.que)}</b>${c.precio ? `<small>${esc(c.precio)} €</small>` : ''}</span><button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('')}</details>` : ''}
     </section>
@@ -659,6 +659,7 @@ const clickApp = e => {
   if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
   if (act === 'pegar' && /ESTILO2/.test($('pegar').value)) {
     const m = $('pegar').value.match(/ESTILO2\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
+    if (o && !o.prendas && Array.isArray(o.compras)) o.prendas = [];
     if (!o || !Array.isArray(o.prendas)) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO2 hasta la última llave.');
     let n = 0, dup = 0, mal = 0;
     const txt = (v, m) => String(v || '').slice(0, m);
@@ -669,7 +670,19 @@ const clickApp = e => {
       if (ya) { Object.assign(ya, extra); dup++; continue; }
       D.prendas.push(Object.assign({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: txt(x.talla, 12), tienda: txt(x.tienda, 30), precio: '', notas: txt(x.notas, 120), fecha: new Date().toISOString(), usos0: 0 }, extra)); n++;
     }
-    save(); ui.looks = []; render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} actualizadas` : ''}${mal ? ` · ${mal} no válidas` : ''}.`);
+    // Compras recomendadas: entran en tu lista con el porqué; si ya estaban (mismo nombre), se actualizan.
+    let nc = 0, nu = 0;
+    for (const x of (Array.isArray(o.compras) ? o.compras : [])) {
+      if (!x || !x.que) continue;
+      const datos = { que: txt(x.que, 80), cat: CATS.includes(x.cat) ? x.cat : '', prio: [1, 2, 3].includes(+x.prio) ? +x.prio : 2, precio: x.precio ? String(x.precio).slice(0, 12) : '', donde: txt(x.donde, 60), por: txt(x.por, 400), link: /^https?:\/\//.test(x.link || '') ? txt(x.link, 300) : '', claude: true };
+      const ya = D.compras.find(c => c.que === datos.que);
+      if (ya) { Object.assign(ya, datos); nu++; } else { D.compras.push(Object.assign({ id: uid('b'), hecho: false, fecha: new Date().toISOString() }, datos)); nc++; }
+    }
+    save(); ui.looks = []; render();
+    const partes = [];
+    if (n || dup || o.prendas.length) partes.push(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} actualizadas` : ''}${mal ? ` · ${mal} no válidas` : ''}`);
+    if (Array.isArray(o.compras)) partes.push(`${nc} ${nc === 1 ? 'compra recomendada' : 'compras recomendadas'} en tu lista${nu ? ` · ${nu} actualizadas` : ''}`);
+    return toast(partes.join(' · ') + '.', Array.isArray(o.compras) ? ['Ver', () => ir('compras')] : null);
   }
   if (act === 'pegar') {
     const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
