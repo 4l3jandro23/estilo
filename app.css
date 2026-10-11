@@ -266,3 +266,17 @@ details.blq li { margin: 8px 0; }
 
 .rec { font-style: normal; color: var(--cuero); }
 .por-c { display: block; margin-top: 4px; background: var(--cuero-soft); color: var(--ink) !important; border-radius: 10px; padding: 6px 9px; font-size: 13.5px; line-height: 1.4; }
+
+/* El tiempo del día */
+.mini-seg { margin: 0; box-shadow: none; background: var(--bg); padding: 3px; border-radius: 12px; }
+.mini-seg button { padding: 5px 10px; font-size: 13px; }
+.franjas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+.franja { background: var(--bg); border-radius: 14px; padding: 10px 6px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.franja small { color: var(--muted); font-size: 12px; }
+.franja .ic { font-size: 24px; line-height: 1.2; }
+.franja b { font: 750 17px var(--display); }
+.llevar { display: grid; gap: 8px; }
+.lleva { display: flex; gap: 10px; align-items: center; background: var(--denim-soft); border-radius: 12px; padding: 8px 12px; }
+.lleva > span:first-child { font-size: 22px; }
+.lleva b { display: block; font-size: 15px; font-weight: 650; }
+.lleva small { color: var(--muted); font-size: 13px; }

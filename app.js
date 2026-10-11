@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 12;
+const VERSION = 13;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -101,16 +101,55 @@ async function analizarIA(url) {
 // ---------- el tiempo en Barcelona (Open-Meteo, sin cuenta) ----------
 const TIEMPO_KEY = 'estiloTiempo';
 const WMO = c => c === 0 ? ['Despejado', '☀️'] : c <= 2 ? ['Algunas nubes', '🌤️'] : c === 3 ? ['Nublado', '☁️'] : c <= 48 ? ['Niebla', '🌫️'] : c <= 67 || (c >= 80 && c <= 82) ? ['Lluvia', '🌧️'] : c <= 77 || c === 85 || c === 86 ? ['Nieve', '❄️'] : ['Tormenta', '⛈️'];
-let TIEMPO = (() => { try { const t = JSON.parse(localStorage.getItem(TIEMPO_KEY)); return t && t.dia === hoyKey() ? t : null; } catch (e) { return null; } })();
+let TIEMPO = (() => { try { const t = JSON.parse(localStorage.getItem(TIEMPO_KEY)); return t && t.v === 2 && t.dia === hoyKey() ? t : null; } catch (e) { return null; } })();
+const FRANJAS = [['Mañana', 8, 13], ['Tarde', 14, 19], ['Noche', 20, 23]];
 async function cargarTiempo() {
   if (TIEMPO && Date.now() - TIEMPO.at < 3600e3) return;
   try {
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.17&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=Europe%2FMadrid&forecast_days=1');
-    const j = await r.json();
-    TIEMPO = { at: Date.now(), dia: hoyKey(), t: Math.round(j.current.temperature_2m), max: Math.round(j.daily.temperature_2m_max[0]), min: Math.round(j.daily.temperature_2m_min[0]), lluvia: j.daily.precipitation_probability_max[0] || 0, code: j.daily.weather_code[0] };
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.17&current=temperature_2m,weather_code&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,uv_index_max,wind_speed_10m_max&timezone=Europe%2FMadrid&forecast_days=2');
+    const j = await r.json(), h = j.hourly;
+    const dias = j.daily.time.map((fecha, d) => {
+      const horas = h.time.map((t, k) => ({ f: t, hora: +t.slice(11, 13), t: h.temperature_2m[k], s: h.apparent_temperature[k], ll: h.precipitation_probability[k] || 0, c: h.weather_code[k], uv: h.uv_index[k] || 0, v: h.wind_speed_10m[k] || 0 })).filter(x => x.f.startsWith(fecha));
+      const franjas = FRANJAS.map(([n, a, b]) => { const l = horas.filter(x => x.hora >= a && x.hora <= b); if (!l.length) return null;
+        return { n, min: Math.round(Math.min(...l.map(x => x.t))), max: Math.round(Math.max(...l.map(x => x.t))), sens: Math.round(Math.min(...l.map(x => x.s))), lluvia: Math.max(...l.map(x => x.ll)), code: Math.max(...l.map(x => x.c)), uv: Math.round(Math.max(...l.map(x => x.uv))), viento: Math.round(Math.max(...l.map(x => x.v))) }; }).filter(Boolean);
+      return { fecha, max: Math.round(j.daily.temperature_2m_max[d]), min: Math.round(j.daily.temperature_2m_min[d]), lluvia: j.daily.precipitation_probability_max[d] || 0, code: j.daily.weather_code[d], uv: Math.round(j.daily.uv_index_max[d] || 0), viento: Math.round(j.daily.wind_speed_10m_max[d] || 0), franjas };
+    });
+    const hoy = dias[0];
+    TIEMPO = { v: 2, at: Date.now(), dia: hoyKey(), t: Math.round(j.current.temperature_2m), max: hoy.max, min: hoy.min, lluvia: hoy.lluvia, code: hoy.code, dias };
     localStorage.setItem(TIEMPO_KEY, JSON.stringify(TIEMPO));
     ui.looks = []; if (ui.tab === 'hoy') render();
   } catch (e) {}
+}
+// Qué llevar encima según el tiempo de todo el día (de 8 a 23 h, que es cuando estás fuera).
+function queLlevar(d) {
+  if (!d) return [];
+  const l = [], fr = d.franjas, frio = Math.min(...fr.map(f => f.sens)), lluviosa = fr.filter(f => f.lluvia >= 40), sol = fr.filter(f => f.n !== 'Noche' && f.code <= 2);
+  const cuando = l2 => l2.map(f => f.n.toLowerCase()).join(' y ');
+  if (lluviosa.length) l.push(['☂️', 'Paraguas', `${Math.max(...lluviosa.map(f => f.lluvia))} % de lluvia por la ${cuando(lluviosa)}`]);
+  else if (fr.some(f => f.lluvia >= 25)) l.push(['🌂', 'Paraguas plegable, por si acaso', `hasta ${Math.max(...fr.map(f => f.lluvia))} % de lluvia`]);
+  if (lluviosa.some(f => f.lluvia >= 50)) l.push(['👟', 'Calzado cerrado que aguante el agua', 'nada de ante, lona ni zapatillas blancas de tela']);
+  if (d.uv >= 3 && sol.length) l.push(['🕶️', 'Gafas de sol', `sol por la ${cuando(sol)}`]);
+  if (d.uv >= 6 || (d.max >= 27 && sol.length)) l.push(['🧢', 'Gorra', d.uv >= 6 ? `índice UV ${d.uv}, alto` : 'mucho sol y calor']);
+  if (d.uv >= 3) l.push(['🧴', 'Protector solar', `índice UV ${d.uv}${d.uv >= 6 ? ': ponte también en orejas y cuello' : ''}`]);
+  if (frio <= 6) l.push(['🧥', 'Abrigo de invierno', `sensación de ${frio}° en algún momento`]);
+  else if (frio <= 11) l.push(['🧥', 'Abrigo o chaquetón', `sensación de ${frio}° ${fr.find(f => f.sens === frio).n === 'Noche' ? 'por la noche' : 'por la mañana'}`]);
+  else if (frio <= 17) { const f = fr.find(x => x.sens === frio); l.push(['🧥', `Chaqueta o sobrecamisa para la ${f.n.toLowerCase()}`, `bajará a ${frio}° de sensación`]); }
+  if (frio <= 8) l.push(['🧣', 'Bufanda', 'hace frío de verdad']);
+  if (d.max - d.min >= 8) l.push(['🧅', 'Ve por capas', `de ${d.min}° a ${d.max}° en el día`]);
+  if (d.viento >= 35) l.push(['💨', 'Algo que corte el viento', `rachas de ${d.viento} km/h${d.viento >= 45 ? '; el paraguas sufrirá' : ''}`]);
+  if (d.max >= 29) l.push(['💧', 'Botella de agua y ropa fresca', `máxima de ${d.max}°: lino, algodón fino y colores claros`]);
+  return l;
+}
+function tiempoHTML() {
+  if (!TIEMPO || !TIEMPO.dias) return '';
+  const tarde = new Date().getHours() >= 21, idx = ui.diaT != null ? ui.diaT : tarde ? 1 : 0, d = TIEMPO.dias[idx];
+  if (!d) return '';
+  const ll = queLlevar(d);
+  return `<section class="card tiempo"><div class="row-h"><h2>${WMO(d.code)[1]} ${idx ? 'Mañana' : 'Hoy'}</h2><div class="seg mini-seg"><button class="${idx === 0 ? 'on' : ''}" data-diat="0">Hoy</button><button class="${idx === 1 ? 'on' : ''}" data-diat="1">${(d => d.charAt(0).toUpperCase() + d.slice(1))(new Date(Date.now() + 864e5).toLocaleDateString('es-ES', { weekday: 'long' }))}</button></div></div>
+    <p class="mini-t" style="margin-top:0">${WMO(d.code)[0]} · ${d.min}–${d.max}°${d.lluvia >= 20 ? ` · ${d.lluvia} % de lluvia` : ''}${d.uv ? ` · UV ${d.uv}` : ''}</p>
+    <div class="franjas">${d.franjas.map(f => `<div class="franja"><small>${f.n}</small><span class="ic">${WMO(f.code)[1]}</span><b>${f.min === f.max ? f.max : `${f.min}–${f.max}`}°</b><small>${f.lluvia >= 20 ? `💧 ${f.lluvia} %` : f.sens < f.min - 1 ? `sensación ${f.sens}°` : WMO(f.code)[0]}</small></div>`).join('')}</div>
+    ${ll.length ? `<p class="mini">Llévate</p><div class="llevar">${ll.map(([i, t, por]) => `<div class="lleva"><span>${i}</span><span><b>${esc(t)}</b><small>${esc(por)}</small></span></div>`).join('')}</div>` : '<p class="mini-t">Día tranquilo: no hace falta nada especial.</p>'}
+  </section>`;
 }
 function clima() {
   if (TIEMPO) return TIEMPO.max >= 25 ? 'Calor' : TIEMPO.max <= 15 ? 'Frío' : 'Entretiempo';
@@ -214,6 +253,7 @@ function vHoy() {
   const semana = [...Array(7)].map((_, i) => { const k = diaKey(Date.now() - (6 - i) * 864e5); return [k, D.historial.find(x => x.dia === k)]; });
   const vacioPerfil = Object.keys(p).filter(k => k !== '_f').length < 3;
   return `${heroHTML('¿Qué me pongo?', `${d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} ${tiempo}`)}
+    ${tiempoHTML()}
     ${vacioPerfil ? `<div class="card aviso"><h2>Hazla tuya</h2><p class="sub">Con tus datos (piel, cara, complexión…) los consejos y la paleta dejan de ser generales.</p><button class="pill on" data-go="yo">Ir a «Para mí»</button></div>` : ''}
     ${h ? `<section class="card puesto"><div class="row-h"><h2>Hoy llevas</h2><button class="pill sm" data-act="quitarhoy">Quitar</button></div><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div></section>` : ''}
     <section class="card costura">
@@ -629,6 +669,7 @@ const clickApp = e => {
   const oc = t.closest('[data-oc]'); if (oc) { ui.ocasion = oc.dataset.oc; ui.lock = []; ui.looks = []; return render(); }
   const gu = t.closest('[data-guia]'); if (gu) return openGuia(gu.dataset.guia);
   const ru = t.closest('[data-rut]'); if (ru) { const k = hoyKey(), r = D.rutina[k] = D.rutina[k] || { m: [], n: [] }, l = r[ru.dataset.rut[0]], i = +ru.dataset.rut.slice(1); if (l.includes(i)) l.splice(l.indexOf(i), 1); else l.push(i); Object.keys(D.rutina).sort().slice(0, -30).forEach(x => delete D.rutina[x]); save(); return render(); }
+  const dt = t.closest('[data-diat]'); if (dt) { ui.diaT = +dt.dataset.diat; return render(); }
   const sg = t.closest('[data-seg]'); if (sg) { ui.outSeg = sg.dataset.seg; return render(); }
   const io = t.closest('[data-ideaoc]'); if (io) { ui.ideaOc = io.dataset.ideaoc; return render(); }
   const od = t.closest('[data-ocdia]'); if (od) { const w = +od.dataset.ocdia, act = (D.semanaOc && D.semanaOc[w]) || SEMANA_OC[w], sig = OCASIONES_IDEAS[(OCASIONES_IDEAS.indexOf(act) + 1) % OCASIONES_IDEAS.length]; D.semanaOc = Object.assign({}, D.semanaOc, { [w]: sig }); save(); return render(); }
