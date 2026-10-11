@@ -1,22 +1,28 @@
-/* Estilo: armario con fotos, conjuntos, compras y consejos según tu perfil. Todo se guarda en este móvil. */
+/* Estilo: tu armario con fotos, qué ponerte según el tiempo y la ocasión, conjuntos, historial, compras y consejos para ti.
+   Se guarda en el dispositivo y, si lo vinculas, se sincroniza cifrado entre tus dispositivos. */
 'use strict';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const hoyKey = () => new Date().toISOString().slice(0, 10);
+const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
+const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
-D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, D);
+D = Object.assign({}, BASE, D);
 if (D.perfil.gafas === 'Sí') D.perfil.gafas = 'Sí, siempre';
+// Las veces que te pusiste algo antes del historial se guardan aparte para no perderlas.
+D.prendas.forEach(p => { if (p.usos && !p.usos0) { p.usos0 = p.usos; } delete p.usos; });
+
 const save = () => {
   let old = null; try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
-  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { return toast('No se ha podido guardar: el móvil no tiene espacio.'); }
+  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { return toast('No se ha podido guardar: el dispositivo no tiene espacio.'); }
   ES.touch(old, D);
 };
 
-const ui = { tab: 'hoy', cat: '', look: null, sel: [] };
+const ui = { tab: 'hoy', cat: '', orden: 'recientes', filtro: '', q: '', ocasion: 'Diario', looks: [], lookI: 0, lock: [], conjOc: '' };
 
 // ---------- fotos en IndexedDB ----------
 const FOTOS = {};
@@ -26,20 +32,18 @@ const fotoPut = (id, url) => fotoTx('readwrite', s => s.put(url, id)).then(() =>
 const fotoDel = id => fotoTx('readwrite', s => s.delete(id)).then(() => { delete FOTOS[id]; });
 const fotosCargar = () => idb.then(db => new Promise(ok => { const t = db.transaction('fotos'), r = t.objectStore('fotos').openCursor(); r.onsuccess = () => { const c = r.result; if (c) { FOTOS[c.key] = c.value; c.continue(); } else ok(); }; r.onerror = () => ok(); })).catch(() => {});
 
-function comprimir(file) {
+function escalar(src, m, q) {
   return new Promise((ok, ko) => {
-    const img = new Image(), url = URL.createObjectURL(file);
-    img.onload = () => { const m = 900, k = Math.min(1, m / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); ok(c.toDataURL('image/jpeg', .8)); };
-    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('foto')); };
-    img.src = url;
+    const img = new Image();
+    img.onload = () => { const k = Math.min(1, m / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', q)); };
+    img.onerror = () => ko(new Error('foto'));
+    img.src = src;
   });
 }
+async function comprimir(file) { const url = URL.createObjectURL(file); try { return await escalar(url, 900, .8); } finally { URL.revokeObjectURL(url); } }
+const reducir = url => escalar(url, 600, .72).catch(() => url);
 
-function reducir(url, m = 600) {
-  return new Promise(ok => { const img = new Image(); img.onload = () => { const k = Math.min(1, m / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .72)); }; img.onerror = () => ok(url); img.src = url; });
-}
-
-// ---------- color automático (gratis, en el móvil) ----------
+// ---------- color automático (gratis, en el dispositivo) ----------
 function colorDominante(url) {
   return new Promise(ok => {
     const img = new Image();
@@ -93,159 +97,317 @@ async function analizarIA(url) {
   return JSON.parse(t.text);
 }
 
+// ---------- el tiempo en Barcelona (Open-Meteo, sin cuenta) ----------
+const TIEMPO_KEY = 'estiloTiempo';
+const WMO = c => c === 0 ? ['Despejado', '☀️'] : c <= 2 ? ['Algunas nubes', '🌤️'] : c === 3 ? ['Nublado', '☁️'] : c <= 48 ? ['Niebla', '🌫️'] : c <= 67 || (c >= 80 && c <= 82) ? ['Lluvia', '🌧️'] : c <= 77 || c === 85 || c === 86 ? ['Nieve', '❄️'] : ['Tormenta', '⛈️'];
+let TIEMPO = (() => { try { const t = JSON.parse(localStorage.getItem(TIEMPO_KEY)); return t && t.dia === hoyKey() ? t : null; } catch (e) { return null; } })();
+async function cargarTiempo() {
+  if (TIEMPO && Date.now() - TIEMPO.at < 3600e3) return;
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=41.39&longitude=2.17&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=Europe%2FMadrid&forecast_days=1');
+    const j = await r.json();
+    TIEMPO = { at: Date.now(), dia: hoyKey(), t: Math.round(j.current.temperature_2m), max: Math.round(j.daily.temperature_2m_max[0]), min: Math.round(j.daily.temperature_2m_min[0]), lluvia: j.daily.precipitation_probability_max[0] || 0, code: j.daily.weather_code[0] };
+    localStorage.setItem(TIEMPO_KEY, JSON.stringify(TIEMPO));
+    ui.looks = []; if (ui.tab === 'hoy') render();
+  } catch (e) {}
+}
+function clima() {
+  if (TIEMPO) return TIEMPO.max >= 25 ? 'Calor' : TIEMPO.max <= 15 ? 'Frío' : 'Entretiempo';
+  const m = new Date().getMonth() + 1; return m >= 6 && m <= 9 ? 'Calor' : (m >= 11 || m <= 3) ? 'Frío' : 'Entretiempo';
+}
+function consejoTiempo() {
+  if (!TIEMPO) return '';
+  const l = [];
+  if (TIEMPO.lluvia >= 50) l.push('lleva chaqueta y evita el ante y las zapatillas de tela');
+  else if (TIEMPO.lluvia >= 30) l.push('puede llover: mejor algo que aguante el agua');
+  if (TIEMPO.max - TIEMPO.min >= 8) l.push('cambia bastante de la mañana a la tarde: ve por capas');
+  if (TIEMPO.max >= 28) l.push('tejidos frescos (lino, algodón fino) y colores claros');
+  if (TIEMPO.max <= 12) l.push('abrigo y una capa de punto');
+  return l.length ? l[0][0].toUpperCase() + l.join('; ').slice(1) + '.' : '';
+}
+
 // ---------- utilidades de interfaz ----------
-function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600); }
+function toast(t, accion) {
+  document.querySelectorAll('.toast').forEach(x => x.remove());
+  const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = `<span>${esc(t)}</span>${accion ? `<button>${esc(accion[0])}</button>` : ''}`;
+  if (accion) d.querySelector('button').onclick = () => { d.remove(); accion[1](); };
+  document.body.appendChild(d); setTimeout(() => d.remove(), accion ? 5000 : 2800);
+}
 function sheet(html) {
-  const v = document.createElement('div'); v.className = 'veil'; v.innerHTML = `<div class="sheet" role="dialog"><div class="grab"></div>${html}</div>`;
+  const v = document.createElement('div'); v.className = 'veil'; v.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
   document.body.appendChild(v); document.body.style.overflow = 'hidden';
-  const close = () => { v.remove(); document.body.style.overflow = ''; };
+  const close = () => { v.remove(); if (!document.querySelector('.veil')) document.body.style.overflow = ''; };
   v.addEventListener('click', e => { if (e.target === v || e.target.closest('[data-close]')) close(); });
   v.close = close; return v;
 }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const v = [...document.querySelectorAll('.veil')].pop(); if (v) v.close(); } });
 const swatch = c => `<span class="sw" style="background:${HEX[c] || '#ccc'}"></span>`;
-const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="">` : `<span class="nofoto" style="background:${HEX[p.color] || '#ccc'}"><b>${esc((p.cat || '?')[0])}</b></span>`;
+const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto" style="background:${HEX[p.color] || '#ccc'}"><b>${esc((p.cat || '?')[0])}</b></span>`;
 const prenda = id => D.prendas.find(p => p.id === id);
+// Nombre automático con concordancia: «camiseta blanca», «zapatillas negras», «vaqueros azul marino».
+const SING = { Camisetas: ['Camiseta', 'f'], Camisas: ['Camisa', 'f'], Polos: ['Polo', 'm'], 'Sudaderas y jerséis': ['Jersey', 'm'], 'Chaquetas y abrigos': ['Chaqueta', 'f'], Vaqueros: ['Vaqueros', 'mp'], Pantalones: ['Pantalón', 'm'], 'Pantalón corto': ['Pantalón corto', 'm'], Zapatillas: ['Zapatillas', 'fp'], Zapatos: ['Zapatos', 'mp'], Accesorios: ['Accesorio', 'm'], Deporte: ['Ropa de deporte', 'f'], Casa: ['Ropa de casa', 'f'] };
+function adjColor(c, g) {
+  if (!c) return '';
+  const l = c.toLowerCase(), var_ = { blanco: 1, negro: 1, rojo: 1, amarillo: 1, morado: 1, estampado: 1, vaquero: 1 }[l];
+  if (!var_) return /^(gris|marrón|verde|azul claro|beis|naranja|rosa)$/.test(l) && g.endsWith('p') ? { gris: 'grises', marrón: 'marrones', verde: 'verdes', 'azul claro': 'azul claro', beis: 'beis', naranja: 'naranjas', rosa: 'rosas' }[l] : l;
+  const f = g[0] === 'f', pl = g.endsWith('p'); let r = f ? l.replace(/o$/, 'a') : l; if (pl) r += 's'; return r;
+}
+const catSing = cat => (SING[cat] || [cat || 'Prenda'])[0];
+const nombre = p => p.nombre || (SING[p.cat] ? `${SING[p.cat][0]} ${p.cat === 'Vaqueros' && p.color === 'Vaquero' ? '' : adjColor(p.color, SING[p.cat][1])}`.trim() : 'Prenda');
+const fmtDia = k => new Date(k + 'T12:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+const dias = k => Math.round((new Date(hoyKey() + 'T12:00') - new Date(k + 'T12:00')) / 864e5);
+const haceDias = k => { const n = dias(k); return n === 0 ? 'hoy' : n === 1 ? 'ayer' : `hace ${n} días`; };
+const eur = n => (Math.round(n * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' €';
+const disponible = p => !p.estado;
 
-function temporada() { const m = new Date().getMonth() + 1; return m >= 6 && m <= 9 ? 'Calor' : (m >= 11 || m <= 3) ? 'Frío' : 'Entretiempo'; }
-const valeHoy = (p, t) => p.temp === 'Todo el año' || !p.temp || (t === 'Entretiempo' ? true : p.temp === t);
+// ---------- historial y estadísticas ----------
+const usos = p => (p.usos0 || 0) + D.historial.filter(h => h.prendas.includes(p.id)).length;
+const ultimo = p => { const h = D.historial.filter(x => x.prendas.includes(p.id)).map(x => x.dia).sort().pop(); return h || p.ultimo0 || null; };
+const deHoy = () => D.historial.find(h => h.dia === hoyKey());
+function ponerHoy(ids, ocasion) {
+  const h = deHoy(), antes = h ? h.prendas.slice() : null;
+  if (h) { h.prendas = [...new Set(ids)]; h.ocasion = ocasion || h.ocasion; h.fecha = new Date().toISOString(); }
+  else D.historial.push({ id: uid('h'), dia: hoyKey(), fecha: new Date().toISOString(), prendas: [...new Set(ids)], ocasion: ocasion || 'Diario' });
+  D.historial = D.historial.slice(-400); save(); render();
+  toast('Apuntado: hoy llevas esto.', ['Deshacer', () => { const x = deHoy(); if (antes) x.prendas = antes; else D.historial = D.historial.filter(y => y !== x); save(); render(); }]);
+}
 
-function generarLook() {
-  const t = temporada(), pool = cats => D.prendas.filter(p => cats.includes(p.cat) && valeHoy(p, t) && !(t === 'Frío' && p.cat === 'Pantalón corto'));
-  const ar = pool(PARTE.arriba), ab = pool(PARTE.abajo), pi = pool(PARTE.pies), en = t === 'Calor' ? [] : pool(PARTE.encima);
-  if (!ar.length || !ab.length) return null;
-  const rnd = l => l[Math.floor(Math.random() * l.length)];
-  let mejor = null;
-  for (let i = 0; i < 40; i++) {
-    const l = [rnd(ar), rnd(ab)]; if (pi.length) l.push(rnd(pi)); if (en.length && (t === 'Frío' || Math.random() < .5)) l.push(rnd(en));
-    const fuertes = l.filter(p => !NEUTROS.includes(p.color)).length;
-    if (fuertes <= 1) { mejor = l; break; } if (!mejor) mejor = l;
+// ---------- generador de conjuntos ----------
+const valeClima = (p, t) => !p.temp || p.temp === 'Todo el año' || t === 'Entretiempo' || p.temp === t;
+function generarLooks() {
+  const t = clima(), oc = OCASION_CATS[ui.ocasion], lock = ui.lock.map(prenda).filter(Boolean);
+  const base = D.prendas.filter(p => disponible(p) && valeClima(p, t) && !(t === 'Frío' && p.cat === 'Pantalón corto'));
+  const parte = (k, cats) => { const l = base.filter(p => cats.includes(p.cat)); const pref = oc && oc[k] ? l.filter(p => oc[k].includes(p.cat)) : l; return pref.length ? pref : l; };
+  const deporte = ui.ocasion === 'Deporte';
+  const ar = parte('arriba', deporte ? PARTE.arriba.concat('Deporte') : PARTE.arriba), ab = parte('abajo', deporte ? PARTE.abajo.concat('Deporte') : PARTE.abajo), pi = parte('pies', PARTE.pies);
+  const capa = t === 'Frío' || (t === 'Entretiempo' && TIEMPO && (TIEMPO.min <= 15 || TIEMPO.lluvia >= 40));
+  const en = t === 'Calor' ? [] : base.filter(p => PARTE.encima.includes(p.cat));
+  const fijo = k => lock.find(p => PARTE[k].includes(p.cat) || (p.cat === 'Deporte' && k !== 'pies' && k !== 'encima'));
+  if (!(fijo('arriba') || ar.length) || !(fijo('abajo') || ab.length)) return [];
+  const rnd = l => l[Math.floor(Math.random() * l.length)], vistos = new Set(), out = [];
+  const pena = p => { const u = ultimo(p); if (!u) return 0; const d = dias(u); return d <= 1 ? 8 : d <= 3 ? 4 : d <= 6 ? 1.5 : 0; };
+  for (let i = 0; i < 160; i++) {
+    const l = [fijo('arriba') || rnd(ar), fijo('abajo') || rnd(ab)];
+    if (fijo('pies') || pi.length) l.push(fijo('pies') || rnd(pi));
+    if (fijo('encima') || (capa && en.length)) l.push(fijo('encima') || rnd(en));
+    const k = l.map(p => p.id).sort().join(); if (vistos.has(k)) continue; vistos.add(k);
+    const nota = notaConjunto(l);
+    const score = nota.n * 10 + l.reduce((s, p) => s + (p.fav ? 2 : 0) - pena(p), 0) + Math.random() * 3;
+    out.push({ ids: l.map(p => p.id), score, nota });
   }
-  return mejor.map(p => p.id);
+  return out.sort((a, b) => b.score - a.score).slice(0, 12);
 }
 
 // ---------- vistas ----------
+function heroHTML(titulo, sub) { return `<header class="hero"><p class="eyebrow">${sub}</p><h1>${titulo}</h1></header>`; }
+
 function vHoy() {
-  const p = D.perfil, vacio = !Object.keys(p).length, t = temporada();
-  if (ui.look && ui.look.some(id => !prenda(id))) ui.look = null;
-  if (!ui.look) ui.look = generarLook();
-  const r = rutina(p), hecho = D.rutina[hoyKey()] || { m: [], n: [] };
-  const d = new Date(), tip = CONSEJOS_GENERALES[(d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate()) % CONSEJOS_GENERALES.length];
-  const look = ui.look ? ui.look.map(prenda).filter(Boolean) : [];
-  return `<section class="hero"><small>${d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} · ${t.toLowerCase()}</small><h1>¿Qué me pongo?</h1></section>
-    ${vacio ? `<div class="card destaca"><h2>Empieza por «Para mí»</h2><p class="sub">Con dos minutos de datos sobre ti, los consejos dejan de ser generales.</p><button class="pill on" data-go="yo">Rellenar mi perfil</button></div>` : ''}
-    <div class="card"><h2>Conjunto para hoy</h2>
-      ${look.length ? `<div class="look">${look.map(x => `<div class="lk">${thumb(x)}<small>${esc(x.nombre || x.cat)}</small></div>`).join('')}</div>
-        <div class="row"><button class="pill" data-act="otro">Otro</button><button class="pill" data-act="puesto">Me lo pongo</button><button class="pill" data-act="guardarlook">Guardar como conjunto</button></div>`
-      : `<p class="sub">Cuando tengas en el armario al menos una prenda de arriba y una de abajo, te propongo conjuntos para el tiempo que hace.</p><button class="pill on" data-go="armario">Añadir mi ropa</button>`}
-    </div>
-    <div class="card"><h2>Rutina de hoy</h2>
+  const p = D.perfil, h = deHoy(), d = new Date();
+  if (!ui.looks.length || ui.looks.some(l => l.ids.some(id => !prenda(id)))) { ui.looks = generarLooks(); ui.lookI = 0; }
+  const look = ui.looks[ui.lookI];
+  const tiempo = TIEMPO ? `<span class="tchip">${WMO(TIEMPO.code)[1]} ${TIEMPO.t}° · ${TIEMPO.min}–${TIEMPO.max}°${TIEMPO.lluvia >= 20 ? ` · ${TIEMPO.lluvia}% lluvia` : ''}</span>` : '';
+  const ct = consejoTiempo();
+  const r = D.rutinaPasos || rutina(p), hecho = D.rutina[hoyKey()] || { m: [], n: [] };
+  const tip = CONSEJOS_GENERALES[(d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate()) % CONSEJOS_GENERALES.length];
+  const cesta = D.prendas.filter(x => x.estado === 'Para lavar');
+  const semana = [...Array(7)].map((_, i) => { const k = diaKey(Date.now() - (6 - i) * 864e5); return [k, D.historial.find(x => x.dia === k)]; });
+  const vacioPerfil = Object.keys(p).filter(k => k !== '_f').length < 3;
+  return `${heroHTML('¿Qué me pongo?', `${d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} ${tiempo}`)}
+    ${vacioPerfil ? `<div class="card aviso"><h2>Hazla tuya</h2><p class="sub">Con tus datos (piel, cara, complexión…) los consejos y la paleta dejan de ser generales.</p><button class="pill on" data-go="yo">Ir a «Para mí»</button></div>` : ''}
+    ${h ? `<section class="card puesto"><div class="row-h"><h2>Hoy llevas</h2><button class="pill sm" data-act="quitarhoy">Quitar</button></div><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div></section>` : ''}
+    <section class="card costura">
+      <div class="row-h"><h2>${h ? 'Otra idea' : 'Tu conjunto para hoy'}</h2>${ui.looks.length > 1 ? `<small class="muted">${ui.lookI + 1} de ${ui.looks.length}</small>` : ''}</div>
+      <div class="chips scroll tight">${OCASIONES.map(o => `<button class="pill sm ${ui.ocasion === o ? 'on' : ''}" data-oc="${o}">${o}</button>`).join('')}</div>
+      ${look ? `<div class="look">${look.ids.map(prenda).filter(Boolean).map(x => `<button class="lk ${ui.lock.includes(x.id) ? 'fijo' : ''}" data-lock="${x.id}" aria-pressed="${ui.lock.includes(x.id)}">${thumb(x)}<small>${esc(nombre(x))}</small><i class="candado" aria-hidden="true">${ui.lock.includes(x.id) ? '🔒' : ''}</i></button>`).join('')}</div>
+        <p class="nota n${look.nota.n}">${esc(look.nota.t)}</p>
+        ${ct ? `<p class="mini-t">${esc(ct)}</p>` : ''}
+        <p class="mini-t">Toca una prenda para fijarla y cambiar solo el resto.</p>
+        <div class="row"><button class="btn" data-act="puesto">Me lo pongo</button><button class="pill" data-act="otro">Otra idea</button><button class="pill" data-act="guardarlook">Guardar</button></div>`
+      : D.prendas.length ? `<p class="sub">No encuentro combinación con lo que tienes disponible${ui.ocasion !== 'Diario' ? ' para esta ocasión' : ''}. Hace falta al menos una prenda de arriba y una de abajo limpias y para este tiempo.</p>${cesta.length ? '<button class="pill" data-act="lavado">Ya he lavado la ropa</button>' : ''}`
+      : `<p class="sub">Añade tu ropa al armario y te propongo conjuntos según el tiempo que hace y la ocasión.</p><button class="btn" data-act="nueva">＋ Añadir mi primera prenda</button>`}
+    </section>
+    ${cesta.length ? `<section class="card cesta"><div class="row-h"><h2>🧺 Para lavar</h2><button class="pill sm" data-act="lavado">Ya está limpia</button></div><div class="look xs">${cesta.map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div><p class="mini-t">No te las propongo hasta que las marques como limpias.</p></section>` : ''}
+    ${D.historial.length ? `<section class="card"><h2>Tu semana</h2><div class="semana">${semana.map(([k, x]) => `<div class="dia ${k === hoyKey() ? 'hoy' : ''}"><small>${fmtDia(k)}</small>${x ? `<span class="mini-look">${x.prendas.slice(0, 2).map(prenda).filter(Boolean).map(thumb).join('')}</span>` : '<span class="vacio-dia">·</span>'}</div>`).join('')}</div></section>` : ''}
+    <section class="card"><div class="row-h"><h2>Rutina de hoy</h2><button class="pill sm" data-act="rutinaedit">Editar</button></div>
       <p class="mini">Mañana</p>${r.manana.map((x, i) => `<button class="chk ${hecho.m.includes(i) ? 'ok' : ''}" data-rut="m${i}"><span></span>${esc(x)}</button>`).join('')}
       <p class="mini">Noche</p>${r.noche.map((x, i) => `<button class="chk ${hecho.n.includes(i) ? 'ok' : ''}" data-rut="n${i}"><span></span>${esc(x)}</button>`).join('')}
-    </div>
-    <div class="card tip"><small>Consejo del día</small><p>${esc(tip)}</p></div>`;
+    </section>
+    <section class="card etiqueta"><small>Consejo del día</small><p>${esc(tip)}</p></section>`;
 }
 
+function listaArmario() {
+  const q = ui.q.trim().toLowerCase();
+  let l = D.prendas.filter(p => (!ui.cat || p.cat === ui.cat) && (!q || [nombre(p), p.cat, p.color, p.tienda, p.notas].join(' ').toLowerCase().includes(q)));
+  if (ui.filtro === 'fav') l = l.filter(p => p.fav);
+  if (ui.filtro === 'lavar') l = l.filter(p => p.estado === 'Para lavar');
+  if (ui.filtro === 'olvidadas') l = l.filter(p => { const u = ultimo(p); return (u ? dias(u) : dias(p.fecha.slice(0, 10))) >= 60; });
+  if (ui.filtro === 'donar') l = l.filter(p => p.estado === 'Para donar' || p.estado === 'Para arreglar');
+  const ord = { recientes: (a, b) => (b.fecha || '').localeCompare(a.fecha || ''), mas: (a, b) => usos(b) - usos(a), menos: (a, b) => usos(a) - usos(b), color: (a, b) => COLORES.indexOf(a.color) - COLORES.indexOf(b.color) || CATS.indexOf(a.cat) - CATS.indexOf(b.cat), tipo: (a, b) => CATS.indexOf(a.cat) - CATS.indexOf(b.cat) };
+  return l.sort(ord[ui.orden]);
+}
 function vArmario() {
-  const l = D.prendas.filter(p => !ui.cat || p.cat === ui.cat);
-  const cats = CATS.filter(c => D.prendas.some(p => p.cat === c));
-  const sinUso = D.prendas.filter(p => !p.usos).length;
-  return `<section class="hero"><small>${D.prendas.length} prendas${D.prendas.length && sinUso ? ` · ${sinUso} sin estrenar en la app` : ''}</small><h1>Mi armario</h1></section>
-    <button class="btn full" data-act="nueva">＋ Añadir prenda (con foto)</button>
-    ${cats.length > 1 ? `<div class="chips"><button class="pill ${!ui.cat ? 'on' : ''}" data-cat="">Todo</button>${cats.map(c => `<button class="pill ${ui.cat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
-    ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-prenda="${p.id}">${thumb(p)}<span class="pn"><b>${esc(p.nombre || p.cat)}</b><small>${swatch(p.color)}${esc(p.color || '')}${p.usos ? ` · ${p.usos} ${p.usos === 1 ? 'vez' : 'veces'}` : ''}</small></span></button>`).join('')}</div>`
-      : `<div class="vacio"><p>Haz una foto a cada prenda (en una percha o extendida en la cama, con buena luz). Empieza por lo que más te pones.</p></div>`}`;
+  const l = listaArmario(), n = D.prendas.length, cats = CATS.filter(c => D.prendas.some(p => p.cat === c));
+  const valor = D.prendas.reduce((s, p) => s + (+p.precio || 0), 0), conPrecio = D.prendas.filter(p => +p.precio);
+  const cpu = conPrecio.length ? conPrecio.reduce((s, p) => s + (+p.precio) / Math.max(1, usos(p)), 0) / conPrecio.length : 0;
+  const olvidadas = D.prendas.filter(p => { const u = ultimo(p); return (u ? dias(u) : dias((p.fecha || '').slice(0, 10) || hoyKey())) >= 60; }).length;
+  return `${heroHTML('Mi armario', n ? `${n} ${n === 1 ? 'prenda' : 'prendas'}` : 'Empieza por lo que más te pones')}
+    <button class="btn full" data-act="nueva">＋ Añadir prenda</button>
+    ${n ? `<div class="stats"><div><b>${n}</b><small>prendas</small></div><div><b>${valor ? eur(valor) : '—'}</b><small>valor</small></div><div><b>${cpu ? eur(cpu) : '—'}</b><small>coste por puesta</small></div><button data-filtro="olvidadas" class="${ui.filtro === 'olvidadas' ? 'on' : ''}"><b>${olvidadas}</b><small>sin ponerte 2 meses</small></button></div>
+      <input type="search" class="buscar" id="buscar" placeholder="Buscar: camisa, azul, Uniqlo…" value="${esc(ui.q)}" autocomplete="off">
+      <div class="chips scroll"><button class="pill sm ${!ui.cat ? 'on' : ''}" data-cat="">Todo</button>${cats.map(c => `<button class="pill sm ${ui.cat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)} <span class="cnt">${D.prendas.filter(p => p.cat === c).length}</span></button>`).join('')}</div>
+      <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['fav', '♥ Favoritas'], ['lavar', '🧺 Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
+      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? '<i class="fav">♥</i>' : ''}${p.estado ? `<i class="badge">${p.estado === 'Para lavar' ? '🧺' : p.estado === 'Para arreglar' ? '🪡' : '📦'}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
+    : `<div class="vacio grande"><div class="percha" aria-hidden="true"></div><p><b>Tu armario está vacío.</b></p><p>Haz una foto a cada prenda, colgada en una percha o extendida en la cama, con luz de día. La app detecta el color sola.</p><p class="mini-t">Empieza por lo que más te pones: con 8–10 prendas ya te propongo conjuntos.</p></div>`}`;
 }
 
 function vConjuntos() {
-  return `<section class="hero"><small>${D.conjuntos.length} guardados</small><h1>Conjuntos</h1></section>
+  const l = D.conjuntos.filter(c => !ui.conjOc || c.ocasion === ui.conjOc).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
+  return `${heroHTML('Conjuntos', `${D.conjuntos.length} guardados`)}
     <button class="btn full" data-act="nuevoconj">＋ Crear conjunto</button>
-    ${D.conjuntos.length ? OCASIONES.map(o => { const l = D.conjuntos.filter(c => c.ocasion === o); return l.length ? `<p class="sec">${o}</p>${l.map(c => `<div class="card conj"><div class="look sm">${c.prendas.map(prenda).filter(Boolean).map(x => `<div class="lk">${thumb(x)}</div>`).join('')}</div><div class="row"><b class="cn">${esc(c.nombre)}</b><small class="muted">${c.usos ? `${c.usos} ${c.usos === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small><span class="sp"></span><button class="pill" data-conjpuesto="${c.id}">Me lo pongo</button><button class="pill" data-conjdel="${c.id}">Borrar</button></div></div>`).join('')}` : ''; }).join('')
-      : `<div class="vacio"><p>Guarda los conjuntos que te gustan para no pensar cada mañana: uno para el trabajo, uno para una cita, uno para salir.</p></div>`}`;
+    ${D.conjuntos.length ? `<div class="chips scroll"><button class="pill sm ${!ui.conjOc ? 'on' : ''}" data-conjoc="">Todos</button>${OCASIONES.filter(o => D.conjuntos.some(c => c.ocasion === o)).map(o => `<button class="pill sm ${ui.conjOc === o ? 'on' : ''}" data-conjoc="${o}">${o}</button>`).join('')}</div>
+      ${l.map(c => { const ps = c.prendas.map(prenda).filter(Boolean), nota = notaConjunto(ps), lav = ps.some(p => p.estado === 'Para lavar'), veces = D.historial.filter(h => c.prendas.every(id => h.prendas.includes(id))).length + (c.usos || 0);
+        return `<div class="card conj"><div class="row-h"><h2>${c.fav ? '♥ ' : ''}${esc(c.nombre)}</h2><span class="tag">${esc(c.ocasion)}</span></div><div class="look sm">${ps.map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div>
+          <p class="nota n${nota.n}">${esc(nota.t)}</p>${c.nota ? `<p class="mini-t">${esc(c.nota)}</p>` : ''}
+          <div class="row"><small class="muted">${veces ? `Puesto ${veces} ${veces === 1 ? 'vez' : 'veces'}` : 'Sin estrenar'}${lav ? ' · algo está para lavar' : ''}</small><span class="sp"></span><button class="pill sm" data-conjfav="${c.id}">${c.fav ? '♥' : '♡'}</button><button class="pill sm" data-conjedit="${c.id}">Editar</button><button class="pill sm on" data-conjpuesto="${c.id}">Me lo pongo</button></div></div>`; }).join('') || '<div class="vacio"><p>No hay conjuntos para esta ocasión.</p></div>'}`
+    : `<div class="vacio grande"><p><b>Guarda los conjuntos que te gustan</b> para no pensar cada mañana: uno para el trabajo, uno para una cita, uno para salir.</p><p class="mini-t">También puedes guardar el que te propone «Hoy».</p></div>`}`;
 }
 
 function faltan() {
   const est = D.perfil.estilo || [], l = BASICOS.concat(...est.map(e => BASICOS_ESTILO[e] || []));
   return l.map(b => ({ ...b, tengo: D.prendas.filter(p => p.cat === b.cat).length })).filter(b => b.tengo < b.min);
 }
+function presupuestoMes() { const m = { 'Menos de 30 €': 30, '30–80 €': 80, '80–150 €': 150, 'Más de 150 €': 250 }[D.perfil.presupuesto]; return m || 0; }
 function vCompras() {
   const f = faltan(), pend = D.compras.filter(c => !c.hecho).sort((a, b) => a.prio - b.prio), hechas = D.compras.filter(c => c.hecho);
-  const total = pend.reduce((s, c) => s + (+c.precio || 0), 0);
-  return `<section class="hero"><small>${pend.length} pendientes${total ? ` · unos ${total} €` : ''}</small><h1>Compras</h1></section>
-    ${D.prendas.length ? (f.length ? `<div class="card"><h2>Lo que te falta para un fondo de armario</h2><p class="sub">Según lo que tienes en el armario${(D.perfil.estilo || []).length ? ' y tu estilo' : ''}.</p>${f.map((b, i) => `<div class="falta"><b>${esc(b.n)}</b><small>${esc(b.por)} Tienes ${b.tengo} de ${b.min}.</small><button class="pill" data-falta="${i}">Añadir a la lista</button></div>`).join('')}</div>` : '<div class="card tip"><p>Tienes un fondo de armario completo. Ahora compra solo lo que combine con al menos tres cosas que ya tienes.</p></div>')
-      : '<div class="card tip"><p>Cuando añadas tu ropa al armario, aquí te diré qué te falta.</p></div>'}
-    <div class="card"><h2>Mi lista</h2>
-      ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}"><span></span></button><span class="b"><b>${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small></span><button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía.</p>'}
+  const total = pend.reduce((s, c) => s + (+c.precio || 0), 0), mes = hoyKey().slice(0, 7);
+  const gastado = hechas.filter(c => (c.cuando || '').startsWith(mes)).reduce((s, c) => s + (+c.precio || 0), 0), tope = presupuestoMes();
+  return `${heroHTML('Compras', `${pend.length} pendientes${total ? ` · unos ${eur(total)}` : ''}`)}
+    <button class="btn full" data-act="locompro">🤔 ¿Lo compro? Compruébalo antes</button>
+    ${tope ? `<section class="card"><div class="row-h"><h2>Este mes</h2><small class="muted">${eur(gastado)} de ${eur(tope)}</small></div><div class="barra"><span style="width:${Math.min(100, gastado / tope * 100)}%" class="${gastado > tope ? 'pasa' : ''}"></span></div><p class="mini-t">${gastado > tope ? 'Te has pasado del presupuesto que pusiste. Nada grave: el mes que viene, más tranquilo.' : 'Según el presupuesto que pusiste en «Para mí».'}</p></section>` : ''}
+    <section class="card"><h2>Mi lista</h2>
+      ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}" aria-label="Marcar como comprado"><span></span></button><span class="b"><b>${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small></span>${c.link ? `<a class="pill sm" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">Ver</a>` : ''}<button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía. Mira abajo lo que te falta.</p>'}
       <button class="pill" data-act="nuevacomp">＋ Añadir</button>
-      ${hechas.length ? `<p class="mini">Comprado</p>${hechas.slice(-8).map(c => `<div class="lrow hecha"><button class="chk ok" data-comp="${c.id}"><span></span></button><span class="b"><b>${esc(c.que)}</b></span><button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('')}` : ''}
-    </div>`;
+      ${hechas.length ? `<details class="sub-det"><summary>Comprado (${hechas.length})</summary>${hechas.slice(-15).reverse().map(c => `<div class="lrow hecha"><button class="chk ok" data-comp="${c.id}" aria-label="Desmarcar"><span></span></button><span class="b"><b>${esc(c.que)}</b>${c.precio ? `<small>${esc(c.precio)} €</small>` : ''}</span><button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('')}</details>` : ''}
+    </section>
+    ${D.prendas.length ? (f.length ? `<section class="card"><h2>Lo que te falta para un buen fondo de armario</h2><p class="sub">Comparado con lo que ya tienes${(D.perfil.estilo || []).length ? ' y tu estilo' : ''}.</p>${f.map((b, i) => `<div class="falta"><b>${esc(b.n)}</b><small>${esc(b.por)}</small><div class="row"><span class="tag">Tienes ${b.tengo} de ${b.min}</span><button class="pill sm" data-falta="${i}">Añadir a la lista</button></div></div>`).join('')}</section>` : '<section class="card etiqueta"><p>Tienes un fondo de armario completo. Ahora compra solo lo que combine con al menos tres cosas que ya tienes (usa «¿Lo compro?»).</p></section>')
+      : '<section class="card etiqueta"><p>Cuando añadas tu ropa, aquí te diré qué te falta.</p></section>'}`;
 }
 
 function vYo() {
-  const p = D.perfil, cs = consejos(p), pr = productos(p);
+  const p = D.perfil, cs = consejos(p), pr = productos(p), pal = paleta(p);
+  const relleno = Object.keys(p).filter(k => k !== '_f' && p[k] != null).length;
   const cuando = k => CAMBIANTES.includes(k) && p._f && p._f[k] ? ` <small class="cuando">desde ${new Date(p._f[k]).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</small>` : '';
-  const campo = c => c.op ? `<div class="campo"><span>${esc(c.t)}${cuando(c.k)}</span>${c.ayuda ? `<small>${esc(c.ayuda)}</small>` : ''}<div class="chips">${c.op.map(o => { const on = c.multi ? (p[c.k] || []).includes(o) : p[c.k] === o; return `<button class="pill ${on ? 'on' : ''}" data-pf="${c.k}" data-v="${esc(o)}">${esc(o)}</button>`; }).join('')}</div></div>`
+  const campo = c => c.op ? `<div class="campo"><span>${esc(c.t)}${cuando(c.k)}</span>${c.ayuda ? `<small>${esc(c.ayuda)}</small>` : ''}<div class="chips">${c.op.map(o => { const on = c.multi ? (p[c.k] || []).includes(o) : p[c.k] === o; return `<button class="pill sm ${on ? 'on' : ''}" data-pf="${c.k}" data-v="${esc(o)}">${esc(o)}</button>`; }).join('')}</div></div>`
     : `<label class="campo"><span>${esc(c.t)}${cuando(c.k)}</span><input data-pfin="${c.k}" type="${c.tipo === 'num' ? 'number' : 'text'}" inputmode="${c.tipo === 'num' ? 'numeric' : 'text'}" value="${esc(p[c.k] || '')}" ${c.u ? `placeholder="${c.u}"` : ''} autocomplete="off"></label>`;
   const viejos = CAMBIANTES.filter(k => p[k] && p._f && p._f[k] && Date.now() - Date.parse(p._f[k]) > 90 * 864e5);
-  return `<section class="hero"><small>Todo se adapta a lo que pongas aquí</small><h1>Para mí</h1></section>
-    <div class="card destaca"><h2>Pegar datos de Claude</h2><p class="sub">Si Claude te ha dado un bloque que empieza por ESTILO1, pégalo aquí y se rellenan tus datos de golpe.</p><textarea id="pegar" rows="3" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div></div>
-    ${viejos.length ? `<div class="card destaca"><h2>¿Sigue todo igual?</h2><p class="sub">Hace más de tres meses que pusiste: ${viejos.map(k => PERFIL_CAMPOS.find(c => c.k === k).t.toLowerCase()).join(', ')}. Si ha cambiado, actualízalo en «Mis datos» y los consejos se ajustan.</p><button class="pill" data-act="sigueigual">Sigue igual</button></div>` : ''}
-    ${cs.length ? `<p class="sec">Mis consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
-      <details class="card blq"><summary>Productos para mí</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
-      : '<div class="card tip"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos.</p></div>'}
-    <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>${PERFIL_CAMPOS.map(campo).join('')}</details>
+  const pegar = `<textarea id="pegar" rows="3" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div>`;
+  return `${heroHTML('Para mí', `${relleno} de ${PERFIL_CAMPOS.length} datos · todo se adapta a ti`)}
+    ${relleno < 6 ? `<section class="card aviso"><h2>Pegar datos de Claude</h2><p class="sub">Si Claude te ha dado un bloque que empieza por ESTILO1, pégalo aquí y se rellenan tus datos de golpe.</p>${pegar}</section>` : ''}
+    ${viejos.length ? `<section class="card aviso"><h2>¿Sigue todo igual?</h2><p class="sub">Hace más de tres meses que pusiste: ${viejos.map(k => PERFIL_CAMPOS.find(c => c.k === k).t.toLowerCase()).join(', ')}. Si ha cambiado, actualízalo y los consejos se ajustan.</p><button class="pill" data-act="sigueigual">Sigue igual</button></section>` : ''}
+    ${pal ? `<section class="card"><h2>Tu paleta</h2><p class="mini">Te favorecen</p><div class="paleta">${pal.si.map(c => `<span><i style="background:${HEX[c]}"></i>${c}</span>`).join('')}</div>${pal.no.length ? `<p class="mini">Mejor lejos de la cara</p><div class="paleta no">${pal.no.map(c => `<span><i style="background:${HEX[c]}"></i>${c}</span>`).join('')}</div>` : ''}</section>` : ''}
+    ${cs.length ? `<p class="sec">Tus consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
+      <details class="card blq"><summary>Productos para ti</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini-t">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
+      : '<section class="card etiqueta"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos y tu paleta.</p></section>'}
+    <p class="sec">Guías</p>
+    <div class="guias">${GUIAS.map(g => `<button class="guia" data-guia="${g.id}"><span>${g.i}</span><b>${esc(g.t)}</b></button>`).join('')}</div>
+    <p class="sec">Tus datos y ajustes</p>
+    <details class="card blq" ${ui.datos ? 'open' : ''}><summary>Mis datos</summary>${relleno >= 6 ? `<div class="campo"><span>Pegar datos de Claude</span>${pegar}</div>` : ''}${PERFIL_CAMPOS.map(campo).join('')}</details>
     ${syncHTML()}
     ${iaHTML()}
-    <details class="card blq"><summary>Copia de seguridad</summary><p class="sub">Todo (también las fotos) se guarda solo en este móvil. Haz una copia de vez en cuando por si cambias de móvil o borras el navegador.</p>
-      <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>`;
+    <details class="card blq"><summary>Copia de seguridad</summary><p class="sub" style="margin-top:10px">Un archivo con todo (también las fotos) por si cambias de dispositivo o quieres guardarlo aparte.</p>
+      <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>
+    <p class="pie">Estilo · tus datos se quedan en tus dispositivos${ES.status().on ? ' y cifrados en tu GitHub' : ''}.</p>`;
 }
 
 function hace(t) { if (!t) return 'nunca'; const s = (Date.now() - t) / 1000; return s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.round(s / 60)} min` : s < 86400 ? `hace ${Math.round(s / 3600)} h` : new Date(t).toLocaleDateString('es-ES'); }
 function syncHTML() {
   const st = ES.status(), otra = ES.fromOtra();
-  return `<details class="card blq" id="syncbox" ${ui.syncOpen || !st.on ? 'open' : ''}><summary>Verlo en el móvil y en el PC</summary>
+  return `<details class="card blq" id="syncbox" ${ui.syncOpen ? 'open' : ''}><summary>Verlo en el móvil y en el PC ${st.on ? `<span class="tag ${st.msg ? 'mal' : 'bien'}">${st.msg ? 'Error' : 'Activada'}</span>` : ''}</summary>
     ${st.on ? `<p class="sub" style="margin-top:10px">${st.busy ? 'Sincronizando…' : st.msg ? '⚠️ ' + esc(st.msg) : 'Sincronizado ' + hace(st.last) + '.'} Lo que cambies aquí aparece en tus otros dispositivos, y al revés. Las fotos viajan en versión reducida.</p>
         <div class="row"><button class="pill on" data-act="syncya">Sincronizar ahora</button><button class="pill" data-act="synccode">Copiar código para otro dispositivo</button><button class="pill" data-act="syncoff">Desconectar</button></div>`
       : `<p class="sub" style="margin-top:10px">Para tener tu armario en el móvil, el PC o donde quieras. Se guarda cifrado en tu GitHub, como Mi Espacio y Cimientos: GitHub solo ve un bloque ilegible.</p>
         ${otra ? '<div class="row"><button class="pill on" data-act="syncotra">Usar la misma conexión que Mi Espacio</button></div><p class="mini">O pega el código</p>' : ''}
         <label class="campo"><span>Código de vinculación (empieza por MD1.)</span><input id="synccode" autocomplete="off" placeholder="MD1.…"></label>
         <div class="row"><button class="pill ${otra ? '' : 'on'}" data-act="synclink">Vincular</button></div>
-        <p class="mini">El código lo tienes en Mi Espacio (Más → Sincronizar y copias) o en Cimientos.</p>`}
+        <p class="mini-t">El código lo tienes en Mi Espacio (Más → Sincronizar y copias) o en Cimientos.</p>`}
   </details>`;
 }
-
 function iaHTML() {
   const c = iaCfg();
-  return `<details class="card blq" ${ui.iaOpen ? 'open' : ''}><summary>Rellenar prendas con IA</summary>
+  return `<details class="card blq" ${ui.iaOpen ? 'open' : ''}><summary>Rellenar prendas con IA ${c.key ? `<span class="tag ${c.on ? 'bien' : ''}">${c.on ? 'Activada' : 'Apagada'}</span>` : ''}</summary>
     <p class="sub" style="margin-top:10px">Sin IA, la app ya detecta el color sola. Con IA, al hacer la foto se rellenan también el tipo, un nombre, la temporada y un consejo para combinarla.</p>
-    <ul><li>Usa la API de Anthropic (Claude), que es de pago por uso y va aparte de la suscripción a Claude. La clave se crea en console.anthropic.com.</li><li>Tu clave se guarda solo en este móvil y no va en la copia de seguridad.</li><li>Cada foto se envía a Anthropic para analizarla.</li></ul>
+    <ul><li>Usa la API de Anthropic (Claude), que es de pago por uso y va aparte de la suscripción a Claude. La clave se crea en console.anthropic.com.</li><li>Tu clave se guarda solo en este dispositivo y no va en la copia de seguridad ni en la sincronización.</li><li>Cada foto se envía a Anthropic para analizarla.</li></ul>
     ${c.key ? `<p class="mini">Clave guardada (acaba en ${esc(c.key.slice(-4))})</p><div class="row"><button class="pill ${c.on ? 'on' : ''}" data-act="iaon">${c.on ? 'IA activada' : 'IA desactivada'}</button><button class="pill" data-act="iaborrar">Borrar clave</button></div>`
       : `<label class="campo"><span>Tu clave de la API</span><input id="iakey" type="password" autocomplete="off" placeholder="sk-ant-…"></label><div class="row"><button class="pill on" data-act="iaguardar">Guardar y activar</button></div>`}
   </details>`;
 }
 
 const VISTAS = { hoy: vHoy, armario: vArmario, conjuntos: vConjuntos, compras: vCompras, yo: vYo };
-function render() { $('app').innerHTML = VISTAS[ui.tab](); document.querySelectorAll('#tabnav button').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab)); }
+function render() {
+  const foco = document.activeElement && document.activeElement.id === 'buscar' ? document.activeElement.selectionStart : null;
+  $('app').innerHTML = VISTAS[ui.tab]();
+  document.querySelectorAll('#tabnav button').forEach(b => { const on = b.dataset.tab === ui.tab; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  if (foco != null && $('buscar')) { $('buscar').focus(); $('buscar').setSelectionRange(foco, foco); }
+}
 function ir(t) { ui.tab = t; render(); window.scrollTo(0, 0); }
 
+// ---------- ficha de una prenda ----------
+function combinaCon(p) {
+  const partes = Object.entries(PARTE).filter(([, cats]) => !cats.includes(p.cat)).flatMap(([, c]) => c);
+  return D.prendas.filter(x => x.id !== p.id && partes.includes(x.cat) && combinan(p.color, x.color) === 2 && disponible(x)).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || usos(b) - usos(a)).slice(0, 8);
+}
+function openFicha(id) {
+  const v = sheet('');
+  const paint = () => {
+    const p = prenda(id); if (!p) return v.close();
+    const u = usos(p), ul = ultimo(p), cc = combinaCon(p), enConj = D.conjuntos.filter(c => c.prendas.includes(p.id));
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div>
+      <div class="ficha-foto">${thumb(p)}<button class="favbtn ${p.fav ? 'on' : ''}" data-ffav aria-label="${p.fav ? 'Quitar de favoritas' : 'Marcar como favorita'}">${p.fav ? '♥' : '♡'}</button></div>
+      <h2 class="ficha-t">${esc(nombre(p))}</h2>
+      <div class="chips tight"><span class="tag">${esc(p.cat)}</span>${p.color ? `<span class="tag">${swatch(p.color)}${esc(p.color)}</span>` : ''}<span class="tag">${esc(p.temp || 'Todo el año')}</span>${p.talla ? `<span class="tag etiq">Talla ${esc(p.talla)}</span>` : ''}${p.tienda ? `<span class="tag">${esc(p.tienda)}</span>` : ''}</div>
+      <div class="stats sm"><div><b>${u}</b><small>${u === 1 ? 'vez' : 'veces'}</small></div><div><b>${ul ? haceDias(ul) : '—'}</b><small>última vez</small></div><div><b>${+p.precio ? eur(+p.precio / Math.max(1, u)) : '—'}</b><small>por puesta</small></div></div>
+      ${p.notas ? `<p class="nota-p">${esc(p.notas)}</p>` : ''}
+      <p class="mini">Estado</p><div class="chips tight">${['', 'Para lavar', 'Para arreglar', 'Para donar'].map(e => `<button class="pill sm ${(p.estado || '') === e ? 'on' : ''}" data-festado="${e}">${e || 'Lista para ponerse'}</button>`).join('')}</div>
+      ${cc.length ? `<p class="mini">Combina con</p><div class="look xs">${cc.map(x => `<button class="lk" data-fotra="${x.id}" title="${esc(nombre(x))}">${thumb(x)}</button>`).join('')}</div>` : ''}
+      ${enConj.length ? `<p class="mini-t">Está en ${enConj.length} ${enConj.length === 1 ? 'conjunto' : 'conjuntos'}: ${enConj.map(c => esc(c.nombre)).join(', ')}.</p>` : ''}
+      <div class="acts"><button class="pill" data-fdup>Duplicar</button><button class="pill" data-fedit>Editar</button><span class="sp"></span><button class="btn" data-fhoy>Me la pongo</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', e => {
+    const p = prenda(id); if (!p) return;
+    if (e.target.closest('[data-ffav]')) { p.fav = !p.fav; save(); paint(); return render(); }
+    const es = e.target.closest('[data-festado]'); if (es) { p.estado = es.dataset.festado || undefined; save(); ui.looks = []; paint(); return render(); }
+    const o = e.target.closest('[data-fotra]'); if (o) { v.close(); return openFicha(o.dataset.fotra); }
+    if (e.target.closest('[data-fedit]')) { v.close(); return openPrenda(id); }
+    if (e.target.closest('[data-fdup]')) { const c = Object.assign({}, p, { id: uid('p'), fecha: new Date().toISOString(), usos0: 0, fv: undefined, nombre: nombre(p) + ' (2)' }); D.prendas.push(c); save(); v.close(); render(); toast('Duplicada sin foto. Ponle la suya.'); return openPrenda(c.id); }
+    if (e.target.closest('[data-fhoy]')) { const h = deHoy(); v.close(); return ponerHoy((h ? h.prendas : []).filter(x => prenda(x) && prenda(x).cat !== p.cat).concat(p.id)); }
+  });
+}
+
 // ---------- formularios ----------
-function openPrenda(id) {
-  const p = id ? prenda(id) : { cat: '', color: '', temp: 'Todo el año' };
+function openPrenda(id, pre) {
+  const p = id ? Object.assign({}, prenda(id)) : Object.assign({ cat: '', color: '', temp: 'Todo el año' }, pre || {});
   let foto = id ? FOTOS[id] : null, cat = p.cat, color = p.color, temp = p.temp || 'Todo el año';
   const v = sheet('');
+  const keep = () => { for (const k of ['nombre', 'notas', 'talla', 'precio', 'tienda']) { const i = v.querySelector('#p_' + k); if (i) p[k] = i.value; } };
   const paint = () => {
     v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>${id ? 'Editar prenda' : 'Nueva prenda'}</h2>
       <label class="foto">${foto ? `<img src="${foto}" alt="">` : '<span>📷 Hacer foto o elegir de la galería</span>'}<input type="file" accept="image/*" id="pf" hidden></label>
-      <label class="campo"><span>Nombre (opcional)</span><input id="pn" value="${esc(p.nombre || '')}" placeholder="Camiseta blanca de Uniqlo" autocomplete="off"></label>
-      <div class="campo"><span>Tipo</span><div class="chips">${CATS.map(c => `<button class="pill ${cat === c ? 'on' : ''}" data-pc="${c}">${c}</button>`).join('')}</div></div>
-      <div class="campo"><span>Color principal</span><div class="chips">${COLORES.map(c => `<button class="pill ${color === c ? 'on' : ''}" data-pcol="${c}">${swatch(c)}${c}</button>`).join('')}</div></div>
-      <div class="campo"><span>Cuándo</span><div class="chips">${TEMPS.map(c => `<button class="pill ${temp === c ? 'on' : ''}" data-pt="${c}">${c}</button>`).join('')}</div></div>
-      <label class="campo"><span>Notas (talla, tienda, si te queda bien…)</span><input id="pno" value="${esc(p.notas || '')}" autocomplete="off"></label>
+      ${foto ? '<p class="mini-t">Toca la foto para cambiarla.</p>' : ''}
+      <div class="campo"><span>Tipo</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-pc="${c}">${c}</button>`).join('')}</div></div>
+      <div class="campo"><span>Color principal</span><div class="chips tight">${COLORES.map(c => `<button class="pill sm ${color === c ? 'on' : ''}" data-pcol="${c}">${swatch(c)}${c}</button>`).join('')}</div></div>
+      <div class="campo"><span>Cuándo</span><div class="chips tight">${TEMPS.map(c => `<button class="pill sm ${temp === c ? 'on' : ''}" data-pt="${c}">${c}</button>`).join('')}</div></div>
+      <label class="campo"><span>Nombre (opcional)</span><input id="p_nombre" value="${esc(p.nombre || '')}" placeholder="Camiseta blanca de Uniqlo" autocomplete="off"></label>
+      <div class="dos"><label class="campo"><span>Talla</span><input id="p_talla" value="${esc(p.talla || '')}" placeholder="M, 42…" autocomplete="off"></label><label class="campo"><span>Precio (€)</span><input id="p_precio" type="number" inputmode="decimal" value="${esc(p.precio || '')}" autocomplete="off"></label></div>
+      <label class="campo"><span>Tienda</span><input id="p_tienda" value="${esc(p.tienda || '')}" placeholder="Uniqlo" autocomplete="off"></label>
+      <label class="campo"><span>Notas (cómo te queda, con qué la llevas…)</span><input id="p_notas" value="${esc(p.notas || '')}" autocomplete="off"></label>
       <div class="acts">${id ? '<button class="btn ghost" data-pdel>Borrar</button>' : '<button class="btn ghost" data-close>Cancelar</button>'}<span class="sp"></span><button class="btn" data-pok>Guardar</button></div>`;
   };
   paint();
   v.addEventListener('change', async e => {
     if (e.target.id !== 'pf' || !e.target.files[0]) return;
-    try { p.nombre = v.querySelector('#pn').value; p.notas = v.querySelector('#pno').value; foto = await comprimir(e.target.files[0]); } catch (er) { return toast('No se ha podido leer la foto.'); }
+    keep();
+    try { foto = await comprimir(e.target.files[0]); } catch (er) { return toast('No se ha podido leer la foto.'); }
     if (!color) { color = await colorDominante(foto); if (color) toast(`Color detectado: ${color.toLowerCase()}. Cámbialo si no es.`); }
     paint();
     if (!iaActiva()) return;
@@ -253,97 +415,186 @@ function openPrenda(id) {
     try {
       const a = await analizarIA(foto);
       if (!v.isConnected) return;
-      p.nombre = a.nombre || p.nombre; if (CATS.includes(a.cat)) cat = a.cat; if (COLORES.includes(a.color)) color = a.color; if (TEMPS.includes(a.temp)) temp = a.temp;
+      keep(); p.nombre = a.nombre || p.nombre; if (CATS.includes(a.cat)) cat = a.cat; if (COLORES.includes(a.color)) color = a.color; if (TEMPS.includes(a.temp)) temp = a.temp;
       if (a.consejo && !p.notas) p.notas = a.consejo;
       paint(); toast('Rellenado con IA. Revisa y guarda.');
     } catch (er) { if (v.isConnected) { paint(); toast(er.message || 'No se ha podido analizar.'); } }
   });
   v.addEventListener('click', async e => {
-    const keep = () => { p.nombre = v.querySelector('#pn').value; p.notas = v.querySelector('#pno').value; };
     const b = e.target.closest('[data-pc],[data-pcol],[data-pt]');
     if (b) { keep(); if (b.dataset.pc) cat = b.dataset.pc; if (b.dataset.pcol) color = b.dataset.pcol; if (b.dataset.pt) temp = b.dataset.pt; return paint(); }
-    if (e.target.closest('[data-pdel]')) { if (!confirm('¿Borrar esta prenda?')) return; D.prendas = D.prendas.filter(x => x.id !== id); D.conjuntos.forEach(c => { c.prendas = c.prendas.filter(x => x !== id); }); D.conjuntos = D.conjuntos.filter(c => c.prendas.length); save(); fotoDel(id).catch(() => {}); v.close(); render(); return; }
+    if (e.target.closest('[data-pdel]')) {
+      if (!confirm('¿Borrar esta prenda? También sale de los conjuntos.')) return;
+      D.prendas = D.prendas.filter(x => x.id !== id); D.conjuntos.forEach(c => { c.prendas = c.prendas.filter(x => x !== id); }); D.conjuntos = D.conjuntos.filter(c => c.prendas.length > 1);
+      save(); fotoDel(id).catch(() => {}); v.close(); ui.looks = []; ui.lock = ui.lock.filter(x => x !== id); render(); return;
+    }
     if (!e.target.closest('[data-pok]')) return;
     if (!cat) return toast('Elige el tipo de prenda.');
     keep();
-    const o = { id: id || uid('p'), nombre: p.nombre.trim(), cat, color, temp, notas: p.notas.trim(), usos: p.usos || 0, fecha: p.fecha || new Date().toISOString() };
-    if (p.fv) o.fv = p.fv;
-    if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (er) { toast('No se ha podido guardar la foto: puede que el móvil esté sin espacio.'); } }
-    D.prendas = id ? D.prendas.map(x => x.id === id ? o : x) : D.prendas.concat(o); save(); v.close(); ui.look = null; render(); toast(id ? 'Guardada' : 'Añadida al armario');
+    const orig = id ? prenda(id) : {};
+    const o = Object.assign({}, orig, { id: id || uid('p'), nombre: (p.nombre || '').trim(), cat, color, temp, notas: (p.notas || '').trim(), talla: (p.talla || '').trim(), precio: p.precio ? String(+p.precio) : '', tienda: (p.tienda || '').trim(), fecha: orig.fecha || new Date().toISOString() });
+    if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (er) { toast('No se ha podido guardar la foto: puede que el dispositivo esté sin espacio.'); } }
+    D.prendas = id ? D.prendas.map(x => x.id === id ? o : x) : D.prendas.concat(o); save(); v.close(); ui.looks = []; render();
+    if (id) toast('Guardada'); else toast('Añadida al armario', ['Añadir otra', () => openPrenda()]);
   });
 }
 
-function openConjunto(pre) {
+function openConjunto(pre, editId) {
   if (D.prendas.length < 2) return toast('Añade antes algunas prendas al armario.');
-  let sel = pre ? pre.slice() : [], oc = 'Diario';
+  const c0 = editId ? D.conjuntos.find(c => c.id === editId) : null;
+  let sel = c0 ? c0.prendas.slice() : pre ? pre.slice() : [], oc = c0 ? c0.ocasion : ui.ocasion || 'Diario', cat = '';
   const v = sheet('');
   const paint = () => {
-    const nombre = v.querySelector('#cn') ? v.querySelector('#cn').value : '';
-    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Nuevo conjunto</h2><p class="sub">Toca las prendas que lo forman.</p>
-      <div class="grid pick">${D.prendas.map(p => `<button class="prenda ${sel.includes(p.id) ? 'sel' : ''}" data-sel="${p.id}">${thumb(p)}<span class="pn"><b>${esc(p.nombre || p.cat)}</b></span></button>`).join('')}</div>
-      <label class="campo"><span>Nombre</span><input id="cn" value="${esc(nombre)}" placeholder="Cita tranquila" autocomplete="off"></label>
-      <div class="campo"><span>Para</span><div class="chips">${OCASIONES.map(o => `<button class="pill ${oc === o ? 'on' : ''}" data-oc="${o}">${o}</button>`).join('')}</div></div>
-      <div class="acts"><button class="btn ghost" data-close>Cancelar</button><span class="sp"></span><button class="btn" data-cok>Guardar (${sel.length})</button></div>`;
+    const g = k => v.querySelector(k) ? v.querySelector(k).value : null;
+    const nom = g('#cn') ?? (c0 ? c0.nombre : ''), not = g('#cno') ?? (c0 ? c0.nota || '' : '');
+    const ps = sel.map(prenda).filter(Boolean), nota = ps.length > 1 ? notaConjunto(ps) : null;
+    const cats = CATS.filter(c => D.prendas.some(p => p.cat === c));
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>${c0 ? 'Editar conjunto' : 'Nuevo conjunto'}</h2><p class="sub">Toca las prendas que lo forman.</p>
+      ${ps.length ? `<div class="look xs">${ps.map(x => `<button class="lk" data-sel="${x.id}">${thumb(x)}</button>`).join('')}</div>${nota ? `<p class="nota n${nota.n}">${esc(nota.t)}</p>` : ''}` : ''}
+      <div class="chips scroll"><button class="pill sm ${!cat ? 'on' : ''}" data-ccat="">Todo</button>${cats.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-ccat="${c}">${c}</button>`).join('')}</div>
+      <div class="grid pick">${D.prendas.filter(p => !cat || p.cat === cat).map(p => `<button class="prenda ${sel.includes(p.id) ? 'sel' : ''}" data-sel="${p.id}">${thumb(p)}<span class="pn"><b>${esc(nombre(p))}</b></span></button>`).join('')}</div>
+      <label class="campo"><span>Nombre</span><input id="cn" value="${esc(nom)}" placeholder="Cita tranquila" autocomplete="off"></label>
+      <div class="campo"><span>Para</span><div class="chips tight">${OCASIONES.map(o => `<button class="pill sm ${oc === o ? 'on' : ''}" data-oc2="${o}">${o}</button>`).join('')}</div></div>
+      <label class="campo"><span>Nota (opcional)</span><input id="cno" value="${esc(not)}" placeholder="Con la colonia nueva" autocomplete="off"></label>
+      <div class="acts">${c0 ? '<button class="btn ghost" data-cdel>Borrar</button>' : '<button class="btn ghost" data-close>Cancelar</button>'}<span class="sp"></span><button class="btn" data-cok>Guardar (${sel.length})</button></div>`;
   };
   paint();
   v.addEventListener('click', e => {
     const s = e.target.closest('[data-sel]'); if (s) { const i = s.dataset.sel; sel = sel.includes(i) ? sel.filter(x => x !== i) : sel.concat(i); return paint(); }
-    const o = e.target.closest('[data-oc]'); if (o) { oc = o.dataset.oc; return paint(); }
+    const o = e.target.closest('[data-oc2]'); if (o) { oc = o.dataset.oc2; return paint(); }
+    const cc = e.target.closest('[data-ccat]'); if (cc) { cat = cc.dataset.ccat; return paint(); }
+    if (e.target.closest('[data-cdel]')) { if (!confirm('¿Borrar este conjunto? Las prendas no se borran.')) return; D.conjuntos = D.conjuntos.filter(c => c !== c0); save(); v.close(); return render(); }
     if (!e.target.closest('[data-cok]')) return;
     if (sel.length < 2) return toast('Elige al menos dos prendas.');
-    D.conjuntos.push({ id: uid('c'), nombre: v.querySelector('#cn').value.trim() || oc, prendas: sel, ocasion: oc, usos: 0 }); save(); v.close(); ir('conjuntos'); toast('Conjunto guardado');
+    const datos = { nombre: v.querySelector('#cn').value.trim() || oc, prendas: sel, ocasion: oc, nota: v.querySelector('#cno').value.trim() };
+    if (c0) Object.assign(c0, datos); else D.conjuntos.push(Object.assign({ id: uid('c'), fecha: new Date().toISOString() }, datos));
+    save(); v.close(); if (c0) render(); else { ir('conjuntos'); } toast(c0 ? 'Conjunto guardado' : 'Conjunto guardado en Conjuntos');
   });
 }
 
 function openCompra(pre) {
-  let prio = 2;
+  let prio = 2, cat = pre && pre.cat || '';
   const v = sheet('');
   const paint = () => {
-    const g = k => v.querySelector(k) ? v.querySelector(k).value : '';
-    const que = g('#cq') || pre || '', pr = g('#cp'), dn = g('#cd');
+    const g = (k, d) => v.querySelector(k) ? v.querySelector(k).value : d;
+    const que = g('#cq', pre && pre.n || ''), pr = g('#cp', ''), dn = g('#cd', ''), ln = g('#cl', '');
     v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Añadir a la lista</h2>
       <label class="campo"><span>Qué</span><input id="cq" value="${esc(que)}" placeholder="Vaqueros azul oscuro rectos" autocomplete="off"></label>
-      <div class="campo"><span>Prioridad</span><div class="chips">${['Urgente', 'Pronto', 'Cuando pueda'].map((x, i) => `<button class="pill ${prio === i + 1 ? 'on' : ''}" data-prio="${i + 1}">${x}</button>`).join('')}</div></div>
-      <label class="campo"><span>Precio aproximado (€)</span><input id="cp" type="number" inputmode="numeric" value="${esc(pr)}" autocomplete="off"></label>
-      <label class="campo"><span>Dónde</span><input id="cd" value="${esc(dn)}" placeholder="Uniqlo" autocomplete="off"></label>
+      <div class="campo"><span>Tipo (para añadirlo al armario cuando lo compres)</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-ccat="${c}">${c}</button>`).join('')}</div></div>
+      <div class="campo"><span>Prioridad</span><div class="chips tight">${['Urgente', 'Pronto', 'Cuando pueda'].map((x, i) => `<button class="pill sm ${prio === i + 1 ? 'on' : ''}" data-prio="${i + 1}">${x}</button>`).join('')}</div></div>
+      <div class="dos"><label class="campo"><span>Precio aprox. (€)</span><input id="cp" type="number" inputmode="decimal" value="${esc(pr)}" autocomplete="off"></label><label class="campo"><span>Dónde</span><input id="cd" value="${esc(dn)}" placeholder="Uniqlo" autocomplete="off"></label></div>
+      <label class="campo"><span>Enlace (opcional)</span><input id="cl" type="url" value="${esc(ln)}" placeholder="https://…" autocomplete="off"></label>
       <div class="acts"><button class="btn ghost" data-close>Cancelar</button><span class="sp"></span><button class="btn" data-cmok>Añadir</button></div>`;
   };
   paint();
   v.addEventListener('click', e => {
     const p = e.target.closest('[data-prio]'); if (p) { prio = +p.dataset.prio; return paint(); }
+    const c = e.target.closest('[data-ccat]'); if (c) { cat = cat === c.dataset.ccat ? '' : c.dataset.ccat; return paint(); }
     if (!e.target.closest('[data-cmok]')) return;
     const que = v.querySelector('#cq').value.trim(); if (!que) return v.querySelector('#cq').focus();
-    D.compras.push({ id: uid('b'), que, prio, precio: v.querySelector('#cp').value, donde: v.querySelector('#cd').value.trim(), hecho: false }); save(); v.close(); render();
+    const link = v.querySelector('#cl').value.trim();
+    D.compras.push({ id: uid('b'), que, cat, prio, precio: v.querySelector('#cp').value, donde: v.querySelector('#cd').value.trim(), link: /^https?:\/\//.test(link) ? link : '', hecho: false, fecha: new Date().toISOString() }); save(); v.close(); render();
   });
 }
 
-function marcarPuesto(ids) { ids.forEach(id => { const p = prenda(id); if (p) p.usos = (p.usos || 0) + 1; }); save(); }
+function openLoCompro() {
+  let cat = '', color = '';
+  const v = sheet('');
+  const paint = () => {
+    let res = '';
+    if (cat && color) {
+      const partes = Object.entries(PARTE).filter(([, cats]) => !cats.includes(cat)).flatMap(([, c]) => c);
+      const comb = D.prendas.filter(x => partes.includes(x.cat) && combinan(color, x.color) === 2), igual = D.prendas.filter(x => x.cat === cat && x.color === color), pal = paleta(D.perfil);
+      const enPal = pal && pal.si.includes(color), fueraPal = pal && pal.no.includes(color) && PARTE.arriba.includes(cat);
+      const puntos = (comb.length >= 3 ? 2 : comb.length ? 1 : 0) + (igual.length ? -1 : 1) + (enPal ? 1 : 0) - (fueraPal ? 2 : 0);
+      const ver = puntos >= 3 ? ['Sí, adelante', 'bien'] : puntos >= 1 ? ['Puede valer', 'medio'] : ['Mejor no', 'mal'];
+      res = `<div class="veredicto ${ver[1]}"><b>${ver[0]}</b></div><ul>
+        <li>${comb.length ? `Combina con <b>${comb.length}</b> ${comb.length === 1 ? 'prenda' : 'prendas'} que ya tienes.` : 'No combina con nada de lo que tienes ahora: tendrías que comprar más cosas para ponértelo.'}</li>
+        <li>${igual.length ? `Ya tienes ${igual.length} ${cat.toLowerCase()} de color ${color.toLowerCase()}. ¿Seguro que necesitas otra?` : 'No tienes nada igual: aporta algo nuevo.'}</li>
+        ${pal ? `<li>${enPal ? 'Es de los colores que más te favorecen.' : fueraPal ? 'Es un color que te favorece poco cerca de la cara.' : 'Es un color neutro para ti: ni suma ni resta.'}</li>` : ''}
+        <li>Regla de oro: si no se te ocurren tres conjuntos con lo que ya tienes, no lo compres.</li></ul>
+        ${comb.length ? `<div class="look xs">${comb.slice(0, 8).map(x => `<span class="lk">${thumb(x)}</span>`).join('')}</div>` : ''}
+        <div class="row"><button class="pill on" data-lcadd>Añadir a la lista</button></div>`;
+    }
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>¿Lo compro?</h2><p class="sub">Dime qué es y te digo si encaja con tu armario.</p>
+      <div class="campo"><span>Tipo</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-lcat="${c}">${c}</button>`).join('')}</div></div>
+      <div class="campo"><span>Color</span><div class="chips tight">${COLORES.map(c => `<button class="pill sm ${color === c ? 'on' : ''}" data-lcol="${c}">${swatch(c)}${c}</button>`).join('')}</div></div>
+      ${res}
+      <div class="acts"><button class="btn ghost" data-close>Cerrar</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', e => {
+    const a = e.target.closest('[data-lcat]'); if (a) { cat = a.dataset.lcat; return paint(); }
+    const b = e.target.closest('[data-lcol]'); if (b) { color = b.dataset.lcol; return paint(); }
+    if (e.target.closest('[data-lcadd]')) { v.close(); openCompra({ n: `${catSing(cat)} ${adjColor(color, (SING[cat] || ['', 'm'])[1])}`, cat }); }
+  });
+}
+
+function openGuia(id) {
+  const g = GUIAS.find(x => x.id === id);
+  sheet(`<p class="eyebrow">${g.i} Guía</p><h2>${esc(g.t)}</h2><ul class="lista-guia">${g.l.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="acts"><span class="sp"></span><button class="btn" data-close>Entendido</button></div>`);
+}
+
+function openRutina() {
+  const r = D.rutinaPasos ? JSON.parse(JSON.stringify(D.rutinaPasos)) : rutina(D.perfil);
+  const v = sheet('');
+  const paint = () => {
+    const bloque = (k, t) => `<p class="mini">${t}</p>${r[k].map((x, i) => `<div class="lrow"><span class="b">${esc(x)}</span><button class="x" data-rdel="${k}:${i}" aria-label="Quitar">×</button></div>`).join('')}<div class="dos"><input id="r_${k}" placeholder="Añadir paso…" autocomplete="off"><button class="pill" data-radd="${k}">Añadir</button></div>`;
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Tu rutina</h2><p class="sub">Pon los pasos que de verdad haces. Mejor tres que hagas siempre que diez que no.</p>${bloque('manana', 'Mañana')}${bloque('noche', 'Noche')}
+      <div class="acts"><button class="btn ghost" data-rreset>Volver a la sugerida</button><span class="sp"></span><button class="btn" data-rok>Guardar</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', e => {
+    const d = e.target.closest('[data-rdel]'); if (d) { const [k, i] = d.dataset.rdel.split(':'); r[k].splice(+i, 1); return paint(); }
+    const a = e.target.closest('[data-radd]'); if (a) { const k = a.dataset.radd, t = v.querySelector('#r_' + k).value.trim(); if (t) { r[k].push(t); paint(); v.querySelector('#r_' + k).focus(); } return; }
+    if (e.target.closest('[data-rreset]')) { D.rutinaPasos = null; save(); v.close(); return render(); }
+    if (e.target.closest('[data-rok]')) { D.rutinaPasos = r; save(); v.close(); render(); }
+  });
+  v.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('r_')) { e.preventDefault(); v.querySelector(`[data-radd="${e.target.id.slice(2)}"]`).click(); } });
+}
 
 function marcaFecha(k) { if (!CAMBIANTES.includes(k)) return; D.perfil._f = Object.assign({}, D.perfil._f); if (D.perfil[k] == null) delete D.perfil._f[k]; else D.perfil._f[k] = new Date().toISOString(); }
 
 // ---------- eventos ----------
 document.getElementById('tabnav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) ir(b.dataset.tab); });
+$('app').addEventListener('input', e => { if (e.target.id === 'buscar') { ui.q = e.target.value; render(); } });
 $('app').addEventListener('click', e => {
   const t = e.target;
   const go = t.closest('[data-go]'); if (go) return ir(go.dataset.go);
   const c = t.closest('[data-cat]'); if (c) { ui.cat = c.dataset.cat; return render(); }
-  const pr = t.closest('[data-prenda]'); if (pr) return openPrenda(pr.dataset.prenda);
+  const or = t.closest('[data-orden]'); if (or) { ui.orden = or.dataset.orden; return render(); }
+  const fi = t.closest('[data-filtro]'); if (fi) { ui.filtro = ui.filtro === fi.dataset.filtro ? '' : fi.dataset.filtro; return render(); }
+  const fc = t.closest('[data-ficha]'); if (fc) return openFicha(fc.dataset.ficha);
+  const lk = t.closest('[data-lock]'); if (lk) { const i = lk.dataset.lock, fija = !ui.lock.includes(i); ui.lock = fija ? ui.lock.concat(i) : ui.lock.filter(x => x !== i); if (fija) { const actual = ui.looks[ui.lookI]; ui.looks = generarLooks(); if (actual) ui.looks.unshift(actual); ui.lookI = 0; toast('Fijada. Pulsa «Otra idea» para cambiar el resto.'); } return render(); }
+  const oc = t.closest('[data-oc]'); if (oc) { ui.ocasion = oc.dataset.oc; ui.lock = []; ui.looks = []; return render(); }
+  const gu = t.closest('[data-guia]'); if (gu) return openGuia(gu.dataset.guia);
   const ru = t.closest('[data-rut]'); if (ru) { const k = hoyKey(), r = D.rutina[k] = D.rutina[k] || { m: [], n: [] }, l = r[ru.dataset.rut[0]], i = +ru.dataset.rut.slice(1); if (l.includes(i)) l.splice(l.indexOf(i), 1); else l.push(i); Object.keys(D.rutina).sort().slice(0, -30).forEach(x => delete D.rutina[x]); save(); return render(); }
-  const cp = t.closest('[data-conjpuesto]'); if (cp) { const cj = D.conjuntos.find(x => x.id === cp.dataset.conjpuesto); cj.usos = (cj.usos || 0) + 1; marcarPuesto(cj.prendas); render(); return toast('Apuntado. ¡A por el día!'); }
-  const cd = t.closest('[data-conjdel]'); if (cd) { if (!confirm('¿Borrar este conjunto? Las prendas no se borran.')) return; D.conjuntos = D.conjuntos.filter(x => x.id !== cd.dataset.conjdel); save(); return render(); }
-  const fa = t.closest('[data-falta]'); if (fa) return openCompra(faltan()[+fa.dataset.falta].n);
-  const co = t.closest('[data-comp]'); if (co) { const x = D.compras.find(y => y.id === co.dataset.comp); x.hecho = !x.hecho; save(); render(); if (x.hecho) toast('Comprado. Añádelo al armario cuando lo tengas.'); return; }
-  const cdl = t.closest('[data-compdel]'); if (cdl) { D.compras = D.compras.filter(y => y.id !== cdl.dataset.compdel); save(); return render(); }
+  const coc = t.closest('[data-conjoc]'); if (coc) { ui.conjOc = coc.dataset.conjoc; return render(); }
+  const cp = t.closest('[data-conjpuesto]'); if (cp) { const cj = D.conjuntos.find(x => x.id === cp.dataset.conjpuesto); return ponerHoy(cj.prendas, cj.ocasion); }
+  const cf = t.closest('[data-conjfav]'); if (cf) { const cj = D.conjuntos.find(x => x.id === cf.dataset.conjfav); cj.fav = !cj.fav; save(); return render(); }
+  const ce = t.closest('[data-conjedit]'); if (ce) return openConjunto(null, ce.dataset.conjedit);
+  const fa = t.closest('[data-falta]'); if (fa) { const b = faltan()[+fa.dataset.falta]; return openCompra({ n: b.n, cat: b.cat }); }
+  const co = t.closest('[data-comp]'); if (co) {
+    const x = D.compras.find(y => y.id === co.dataset.comp); x.hecho = !x.hecho; x.cuando = x.hecho ? new Date().toISOString() : undefined; save(); render();
+    if (x.hecho) toast('Comprado.', ['Añadir al armario', () => openPrenda(null, { nombre: x.que, cat: x.cat || '', precio: x.precio || '', tienda: x.donde || '' })]);
+    return;
+  }
+  const cdl = t.closest('[data-compdel]'); if (cdl) { const x = D.compras.find(y => y.id === cdl.dataset.compdel); D.compras = D.compras.filter(y => y !== x); save(); render(); return toast('Borrado.', ['Deshacer', () => { D.compras.push(x); save(); render(); }]); }
   const pf = t.closest('[data-pf]'); if (pf) { const k = pf.dataset.pf, v = pf.dataset.v, campo = PERFIL_CAMPOS.find(x => x.k === k); if (campo.multi) { const l = D.perfil[k] || []; D.perfil[k] = l.includes(v) ? l.filter(x => x !== v) : l.concat(v); } else D.perfil[k] = D.perfil[k] === v ? undefined : v; marcaFecha(k); save(); ui.datos = true; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
   const a = t.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act === 'nueva') return openPrenda();
   if (act === 'nuevoconj') return openConjunto();
   if (act === 'nuevacomp') return openCompra();
-  if (act === 'otro') { ui.look = generarLook(); return render(); }
-  if (act === 'puesto') { marcarPuesto(ui.look); return toast('Apuntado. ¡A por el día!'); }
-  if (act === 'guardarlook') return openConjunto(ui.look);
+  if (act === 'locompro') return openLoCompro();
+  if (act === 'rutinaedit') return openRutina();
+  if (act === 'otro') { if (!ui.looks.length) return; ui.lookI = (ui.lookI + 1) % ui.looks.length; return render(); }
+  if (act === 'puesto') { const l = ui.looks[ui.lookI]; if (l) { ponerHoy(l.ids, ui.ocasion); ui.lock = []; } return; }
+  if (act === 'guardarlook') { const l = ui.looks[ui.lookI]; return l && openConjunto(l.ids); }
+  if (act === 'quitarhoy') { const h = deHoy(); D.historial = D.historial.filter(x => x !== h); save(); render(); return toast('Quitado.', ['Deshacer', () => { D.historial.push(h); save(); render(); }]); }
+  if (act === 'lavado') { const l = D.prendas.filter(p => p.estado === 'Para lavar'); l.forEach(p => { p.estado = undefined; }); save(); ui.looks = []; render(); return toast(`${l.length} ${l.length === 1 ? 'prenda lista' : 'prendas listas'} para ponerse.`); }
   if (act === 'exportar') return exportar();
+  if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
   if (act === 'pegar') {
     const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
     if (!o) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO1 hasta la última llave.');
@@ -355,7 +606,6 @@ $('app').addEventListener('click', e => {
     }
     save(); ui.datos = true; render(); return toast(n ? `${n} ${n === 1 ? 'dato aplicado' : 'datos aplicados'}` : 'No había datos válidos en el bloque.');
   }
-  if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
   if (act === 'syncya') { ui.syncOpen = true; return ES.sync(); }
   if (act === 'synccode') { try { navigator.clipboard.writeText(ES.code()); toast('Código copiado. Pégalo en Estilo en tu otro dispositivo.'); } catch (er) {} return; }
   if (act === 'syncoff') { if (!confirm('¿Desconectar la sincronización en este dispositivo? Tus datos se quedan aquí.')) return; ES.off(); ui.syncOpen = true; return render(); }
@@ -367,37 +617,40 @@ $('app').addEventListener('click', e => {
     return;
   }
   if (act === 'iaguardar') { const k = $('iakey').value.trim(); if (!/^sk-ant-/.test(k)) return toast('Eso no parece una clave de la API (empieza por sk-ant-).'); localStorage.setItem(IA_KEY, JSON.stringify({ key: k, on: true })); ui.iaOpen = true; render(); return toast('IA activada'); }
-  if (act === 'iaon') { const c = iaCfg(); c.on = !c.on; localStorage.setItem(IA_KEY, JSON.stringify(c)); ui.iaOpen = true; return render(); }
-  if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este móvil?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
+  if (act === 'iaon') { const c2 = iaCfg(); c2.on = !c2.on; localStorage.setItem(IA_KEY, JSON.stringify(c2)); ui.iaOpen = true; return render(); }
+  if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este dispositivo?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
 });
 $('app').addEventListener('change', e => {
   const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; marcaFecha(i.dataset.pfin); save(); if (CAMBIANTES.includes(i.dataset.pfin)) { const y = window.scrollY; ui.datos = true; render(); window.scrollTo(0, y); } return; }
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
 });
+$('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; }, true);
 
-async function exportar() {
-  const blob = new Blob([JSON.stringify({ app: 'estilo', v: 1, fecha: new Date().toISOString(), datos: D, fotos: FOTOS })], { type: 'application/json' });
+// ---------- copia de seguridad ----------
+function exportar() {
+  const blob = new Blob([JSON.stringify({ app: 'estilo', v: 2, fecha: new Date().toISOString(), datos: D, fotos: FOTOS })], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `estilo-copia-${hoyKey()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 async function importar(f) {
   try {
     const j = JSON.parse(await f.text()); if (j.app !== 'estilo' || !j.datos) throw new Error('formato');
     if (!confirm('Esto sustituye lo que tienes ahora en la app por la copia. ¿Seguir?')) return;
-    D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, j.datos); save();
+    D = Object.assign({}, BASE, j.datos); D.prendas.forEach(p => { if (p.usos && !p.usos0) p.usos0 = p.usos; delete p.usos; });
     for (const [k, v] of Object.entries(j.fotos || {})) await fotoPut(k, v);
     const ahora = Date.now(); D.prendas.forEach(p => { if (FOTOS[p.id]) { p.fv = ahora; ES.fotoLocal(p.id, ahora); } }); save();
-    ui.look = null; render(); toast('Copia restaurada');
+    ui.looks = []; render(); toast('Copia restaurada');
   } catch (e) { toast('Ese archivo no es una copia de Estilo.'); }
 }
 
+// ---------- arranque ----------
 ES.init({
   get: () => D,
-  set: d => { D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, D, d); D.perfil = D.perfil || {}; D.rutina = D.rutina || {}; try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} },
+  set: d => { D = Object.assign({}, BASE, D, d); D.perfil = D.perfil || {}; D.rutina = D.rutina || {}; D.historial = D.historial || []; try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} },
   fotoGet: id => FOTOS[id], fotoPut, fotoDel: id => fotoDel(id).catch(() => {}), reducir
 });
 ES.onChange = s => {
-  if (s === 'changed') { ui.look = null; render(); return; }
-  const box = document.getElementById('syncbox'); if (box && ui.tab === 'yo') { const y = window.scrollY; ui.syncOpen = box.open; render(); window.scrollTo(0, y); }
+  if (s === 'changed') { ui.looks = []; if (!document.querySelector('.veil')) render(); return; }
+  if (ui.tab === 'yo' && !document.querySelector('.veil')) { const y = window.scrollY; render(); window.scrollTo(0, y); }
 };
 fotosCargar().then(() => {
   // Prendas con foto de antes de la sincronización: se les pone versión para que viajen.
@@ -406,6 +659,7 @@ fotosCargar().then(() => {
   if (cambia) save();
   render(); ES.sync();
 });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ES.sync(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { ES.sync(); cargarTiempo(); } });
 render();
+cargarTiempo();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});
