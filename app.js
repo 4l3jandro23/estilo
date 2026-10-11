@@ -142,7 +142,7 @@ function sheet(html) {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const v = [...document.querySelectorAll('.veil')].pop(); if (v) v.close(); } });
 const swatch = c => `<span class="sw" style="background:${HEX[c] || '#ccc'}"></span>`;
-const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color)}</span>`;
+const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color, p.corte)}</span>`;
 const prenda = id => D.prendas.find(p => p.id === id);
 // Nombre automático con concordancia: «camiseta blanca», «zapatillas negras», «vaqueros azul marino».
 const SING = { Camisetas: ['Camiseta', 'f'], Camisas: ['Camisa', 'f'], Polos: ['Polo', 'm'], 'Sudaderas y jerséis': ['Jersey', 'm'], 'Chaquetas y abrigos': ['Chaqueta', 'f'], Vaqueros: ['Vaqueros', 'mp'], Pantalones: ['Pantalón', 'm'], 'Pantalón corto': ['Pantalón corto', 'm'], Zapatillas: ['Zapatillas', 'fp'], Zapatos: ['Zapatos', 'mp'], Accesorios: ['Accesorio', 'm'], Deporte: ['Ropa de deporte', 'f'], Casa: ['Ropa de casa', 'f'] };
@@ -243,6 +243,7 @@ function listaArmario() {
   if (ui.filtro === 'lavar') l = l.filter(p => p.estado === 'Para lavar');
   if (ui.filtro === 'olvidadas') l = l.filter(p => { const u = ultimo(p); return (u ? dias(u) : dias(p.fecha.slice(0, 10))) >= 60; });
   if (ui.filtro === 'donar') l = l.filter(p => p.estado === 'Para donar' || p.estado === 'Para arreglar');
+  if (ui.filtro === 'revision') l = l.filter(p => p.veredicto && p.veredicto !== 'Quédatela').sort((a, b) => VEREDICTOS.findIndex(v => v[0] === b.veredicto) - VEREDICTOS.findIndex(v => v[0] === a.veredicto));
   const ord = { recientes: (a, b) => (b.fecha || '').localeCompare(a.fecha || ''), mas: (a, b) => usos(b) - usos(a), menos: (a, b) => usos(a) - usos(b), color: (a, b) => COLORES.indexOf(a.color) - COLORES.indexOf(b.color) || CATS.indexOf(a.cat) - CATS.indexOf(b.cat), tipo: (a, b) => CATS.indexOf(a.cat) - CATS.indexOf(b.cat) };
   return l.sort(ord[ui.orden]);
 }
@@ -257,9 +258,16 @@ function vArmario() {
     ${n ? `<div class="stats"><div><b>${n}</b><small>prendas</small></div><div><b>${valor ? eur(valor) : '—'}</b><small>valor</small></div><div><b>${cpu ? eur(cpu) : '—'}</b><small>coste por puesta</small></div><button data-filtro="olvidadas" class="${ui.filtro === 'olvidadas' ? 'on' : ''}"><b>${olvidadas}</b><small>sin ponerte 2 meses</small></button></div>
       <input type="search" class="buscar" id="buscar" placeholder="Buscar: camisa, azul, Uniqlo…" value="${esc(ui.q)}" autocomplete="off">
       <div class="chips scroll"><button class="pill sm ${!ui.cat ? 'on' : ''}" data-cat="">Todo</button>${cats.map(c => `<button class="pill sm ${ui.cat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)} <span class="cnt">${D.prendas.filter(p => p.cat === c).length}</span></button>`).join('')}</div>
-      <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['fav', '♥ Favoritas'], ['lavar', '🧺 Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
-      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? '<i class="fav">♥</i>' : ''}${p.estado ? `<i class="badge">${p.estado === 'Para lavar' ? '🧺' : p.estado === 'Para arreglar' ? '🪡' : '📦'}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
+      <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['revision', '🔍 Revisión'], ['fav', '♥ Favoritas'], ['lavar', '🧺 Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
+      ${ui.filtro === 'revision' ? resumenRevision() : ''}
+      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? '<i class="fav">♥</i>' : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${p.estado === 'Para lavar' ? '🧺' : p.estado === 'Para arreglar' ? '🪡' : '📦'}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
     : `<div class="vacio grande"><div class="percha" aria-hidden="true"></div><p><b>Tu armario está vacío.</b></p><p>Haz una foto a cada prenda, colgada en una percha o extendida en la cama, con luz de día. La app detecta el color sola.</p><p class="mini-t">Empieza por lo que más te pones: con 8–10 prendas ya te propongo conjuntos.</p></div>`}`;
+}
+
+function resumenRevision() {
+  const con = D.prendas.filter(p => p.veredicto);
+  if (!con.length) return '<section class="card etiqueta"><p>Cuando Claude revise tu ropa, aquí verás qué quedarte, qué arreglar, qué vender y qué donar.</p></section>';
+  return `<section class="card"><h2>Revisión de tu armario</h2><div class="revis">${VEREDICTOS.map(([v, c, i]) => { const n = con.filter(p => p.veredicto === v).length; return n ? `<span class="tag ${c}">${i} ${v}: ${n}</span>` : ''; }).join('')}</div><p class="mini-t">Abajo, lo que no es «quédatela». Toca cada prenda para ver por qué.</p></section>`;
 }
 
 function vConjuntos(sinHero) {
@@ -320,6 +328,7 @@ function vCompras() {
   const gastado = hechas.filter(c => (c.cuando || '').startsWith(mes)).reduce((s, c) => s + (+c.precio || 0), 0), tope = presupuestoMes();
   return `${heroHTML('Compras', `${pend.length} pendientes${total ? ` · unos ${eur(total)}` : ''}`)}
     <button class="btn full" data-act="locompro">🤔 ¿Lo compro? Compruébalo antes</button>
+    <div class="row" style="margin:-4px 0 14px"><button class="pill" data-guia="tiendas">🛍️ Dónde comprar</button><button class="pill" data-guia="vender">♻️ Vender o donar</button></div>
     ${tope ? `<section class="card"><div class="row-h"><h2>Este mes</h2><small class="muted">${eur(gastado)} de ${eur(tope)}</small></div><div class="barra"><span style="width:${Math.min(100, gastado / tope * 100)}%" class="${gastado > tope ? 'pasa' : ''}"></span></div><p class="mini-t">${gastado > tope ? 'Te has pasado del presupuesto que pusiste. Nada grave: el mes que viene, más tranquilo.' : 'Según el presupuesto que pusiste en «Para mí».'}</p></section>` : ''}
     <section class="card"><h2>Mi lista</h2>
       ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}" aria-label="Marcar como comprado"><span></span></button><span class="b"><b>${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small></span>${c.link ? `<a class="pill sm" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">Ver</a>` : ''}<button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía. Mira abajo lo que te falta.</p>'}
@@ -403,7 +412,9 @@ function openFicha(id) {
       <h2 class="ficha-t">${esc(nombre(p))}</h2>
       <div class="chips tight"><span class="tag">${esc(p.cat)}</span>${p.color ? `<span class="tag">${swatch(p.color)}${esc(p.color)}</span>` : ''}<span class="tag">${esc(p.temp || 'Todo el año')}</span>${p.talla ? `<span class="tag etiq">Talla ${esc(p.talla)}</span>` : ''}${p.tienda ? `<span class="tag">${esc(p.tienda)}</span>` : ''}</div>
       <div class="stats sm"><div><b>${u}</b><small>${u === 1 ? 'vez' : 'veces'}</small></div><div><b>${ul ? haceDias(ul) : '—'}</b><small>última vez</small></div><div><b>${+p.precio ? eur(+p.precio / Math.max(1, u)) : '—'}</b><small>por puesta</small></div></div>
+      ${p.veredicto || p.consejo ? `<section class="opinion"><p class="mini" style="margin-top:0">Mi opinión</p>${p.veredicto ? `<p class="veredicto-t ${(VER[p.veredicto] || [])[1] || ''}">${(VER[p.veredicto] || [])[2] || ''} ${esc(p.veredicto)}</p>` : ''}${p.consejo ? `<p>${esc(p.consejo)}</p>` : ''}${p.ocasiones ? `<p class="mini-t"><b>Cuándo:</b> ${esc(p.ocasiones)}</p>` : ''}${p.combinar ? `<p class="mini-t"><b>Con qué:</b> ${esc(p.combinar)}</p>` : ''}</section>` : ''}
       ${p.notas ? `<p class="nota-p">${esc(p.notas)}</p>` : ''}
+      <p class="mini">Qué hacer con ella</p><div class="chips tight">${VEREDICTOS.map(([v, c, i]) => `<button class="pill sm ${p.veredicto === v ? 'on' : ''}" data-fver="${esc(v)}">${i} ${esc(v)}</button>`).join('')}</div>
       <p class="mini">Estado</p><div class="chips tight">${['', 'Para lavar', 'Para arreglar', 'Para donar'].map(e => `<button class="pill sm ${(p.estado || '') === e ? 'on' : ''}" data-festado="${e}">${e || 'Lista para ponerse'}</button>`).join('')}</div>
       ${cc.length ? `<p class="mini">Combina con</p><div class="look xs">${cc.map(x => `<button class="lk" data-fotra="${x.id}" title="${esc(nombre(x))}">${thumb(x)}</button>`).join('')}</div>` : ''}
       ${enConj.length ? `<p class="mini-t">Está en ${enConj.length} ${enConj.length === 1 ? 'conjunto' : 'conjuntos'}: ${enConj.map(c => esc(c.nombre)).join(', ')}.</p>` : ''}
@@ -413,6 +424,7 @@ function openFicha(id) {
   v.addEventListener('click', e => {
     const p = prenda(id); if (!p) return;
     if (e.target.closest('[data-ffav]')) { p.fav = !p.fav; save(); paint(); return render(); }
+    const fv = e.target.closest('[data-fver]'); if (fv) { p.veredicto = p.veredicto === fv.dataset.fver ? undefined : fv.dataset.fver; save(); paint(); return render(); }
     const es = e.target.closest('[data-festado]'); if (es) { p.estado = es.dataset.festado || undefined; save(); ui.looks = []; paint(); return render(); }
     const o = e.target.closest('[data-fotra]'); if (o) { v.close(); return openFicha(o.dataset.fotra); }
     if (e.target.closest('[data-fedit]')) { v.close(); return openPrenda(id); }
@@ -434,6 +446,7 @@ function openPrenda(id, pre) {
       <div class="campo"><span>Tipo</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-pc="${c}">${c}</button>`).join('')}</div></div>
       <div class="campo"><span>Color principal</span><div class="chips tight">${COLORES.map(c => `<button class="pill sm ${color === c ? 'on' : ''}" data-pcol="${c}">${swatch(c)}${c}</button>`).join('')}</div></div>
       <div class="campo"><span>Cuándo</span><div class="chips tight">${TEMPS.map(c => `<button class="pill sm ${temp === c ? 'on' : ''}" data-pt="${c}">${c}</button>`).join('')}</div></div>
+      ${cat === 'Pantalones' || cat === 'Vaqueros' ? `<div class="campo"><span>Corte</span><div class="chips tight">${CORTES.map(c => `<button class="pill sm ${p.corte === c ? 'on' : ''}" data-pcorte="${c}">${c}</button>`).join('')}</div></div>` : ''}
       <label class="campo"><span>Nombre (opcional)</span><input id="p_nombre" value="${esc(p.nombre || '')}" placeholder="Camiseta blanca de Uniqlo" autocomplete="off"></label>
       <div class="dos"><label class="campo"><span>Talla</span><input id="p_talla" value="${esc(p.talla || '')}" placeholder="M, 42…" autocomplete="off"></label><label class="campo"><span>Precio (€)</span><input id="p_precio" type="number" inputmode="decimal" value="${esc(p.precio || '')}" autocomplete="off"></label></div>
       <label class="campo"><span>Tienda</span><input id="p_tienda" value="${esc(p.tienda || '')}" placeholder="Uniqlo" autocomplete="off"></label>
@@ -458,6 +471,7 @@ function openPrenda(id, pre) {
     } catch (er) { if (v.isConnected) { paint(); toast(er.message || 'No se ha podido analizar.'); } }
   });
   v.addEventListener('click', async e => {
+    const pco = e.target.closest('[data-pcorte]'); if (pco) { keep(); p.corte = p.corte === pco.dataset.pcorte ? '' : pco.dataset.pcorte; return paint(); }
     const b = e.target.closest('[data-pc],[data-pcol],[data-pt]');
     if (b) { keep(); if (b.dataset.pc) cat = b.dataset.pc; if (b.dataset.pcol) color = b.dataset.pcol; if (b.dataset.pt) temp = b.dataset.pt; return paint(); }
     if (e.target.closest('[data-pdel]')) {
@@ -469,7 +483,7 @@ function openPrenda(id, pre) {
     if (!cat) return toast('Elige el tipo de prenda.');
     keep();
     const orig = id ? prenda(id) : {};
-    const o = Object.assign({}, orig, { id: id || uid('p'), nombre: (p.nombre || '').trim(), cat, color, temp, notas: (p.notas || '').trim(), talla: (p.talla || '').trim(), precio: p.precio ? String(+p.precio) : '', tienda: (p.tienda || '').trim(), fecha: orig.fecha || new Date().toISOString() });
+    const o = Object.assign({}, orig, { id: id || uid('p'), nombre: (p.nombre || '').trim(), cat, color, temp, corte: (cat === 'Pantalones' || cat === 'Vaqueros') ? p.corte || '' : '', notas: (p.notas || '').trim(), talla: (p.talla || '').trim(), precio: p.precio ? String(+p.precio) : '', tienda: (p.tienda || '').trim(), fecha: orig.fecha || new Date().toISOString() });
     if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (er) { toast('No se ha podido guardar la foto: puede que el dispositivo esté sin espacio.'); } }
     D.prendas = id ? D.prendas.map(x => x.id === id ? o : x) : D.prendas.concat(o); save(); v.close(); ui.looks = []; render();
     if (id) toast('Guardada'); else toast('Añadida al armario', ['Añadir otra', () => openPrenda()]);
@@ -647,13 +661,15 @@ const clickApp = e => {
     const m = $('pegar').value.match(/ESTILO2\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
     if (!o || !Array.isArray(o.prendas)) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO2 hasta la última llave.');
     let n = 0, dup = 0, mal = 0;
+    const txt = (v, m) => String(v || '').slice(0, m);
     for (const x of o.prendas) {
       if (!x || !CATS.includes(x.cat) || (x.color && !COLORES.includes(x.color))) { mal++; continue; }
-      const nom = String(x.nombre || '').slice(0, 60);
-      if (D.prendas.some(p => p.cat === x.cat && p.color === (x.color || '') && (p.nombre || '') === nom)) { dup++; continue; }
-      D.prendas.push({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: String(x.talla || '').slice(0, 12), tienda: String(x.tienda || '').slice(0, 30), precio: '', notas: String(x.notas || '').slice(0, 120), fecha: new Date().toISOString(), usos0: 0 }); n++;
+      const nom = txt(x.nombre, 60), extra = { corte: CORTES.includes(x.corte) ? x.corte : '', veredicto: VER[x.veredicto] ? x.veredicto : undefined, consejo: txt(x.consejo, 500), ocasiones: txt(x.ocasiones, 200), combinar: txt(x.combinar, 200), ref: txt(x.ref, 30) };
+      const ya = D.prendas.find(p => p.cat === x.cat && (p.nombre || '') === nom);
+      if (ya) { Object.assign(ya, extra); dup++; continue; }
+      D.prendas.push(Object.assign({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: txt(x.talla, 12), tienda: txt(x.tienda, 30), precio: '', notas: txt(x.notas, 120), fecha: new Date().toISOString(), usos0: 0 }, extra)); n++;
     }
-    save(); ui.looks = []; render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} ya estaban` : ''}${mal ? ` · ${mal} no válidas` : ''}.`);
+    save(); ui.looks = []; render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} actualizadas` : ''}${mal ? ` · ${mal} no válidas` : ''}.`);
   }
   if (act === 'pegar') {
     const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}

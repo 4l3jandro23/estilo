@@ -135,5 +135,30 @@ const GUIAS = [
     'Lava la ropa con detergente sin perfume y aclara bien: restos de jabón o suavizante perfumado irritan más de lo que parece.',
     'Ropa nueva: lávala antes de estrenarla, para quitar los restos de fábrica.',
     'En verano, el lino y el algodón ligero transpiran mejor y evitan los granitos de sudor en la espalda y el pecho.'
+  ] },
+  { id: 'tiendas', t: 'Dónde comprar: Barcelona y online', i: '🛍️', l: [
+    'Básicos buenos y baratos: Uniqlo (camisetas, chinos, punto, sobrecamisas; la mejor relación calidad-precio para tu fondo de armario). Tiene tiendas en el centro y vende online.',
+    'Muy barato para cosas de casa, deporte o pruebas: Decathlon (deporte y ropa técnica), Primark y Lefties. Para lo que se ve mucho, mejor algo un punto más caro.',
+    'Para prendas con más estilo a precio medio: Zara, Pull&Bear, Springfield, Mango Man y H&M. Compra en rebajas (enero y julio) y en los «mid season sale».',
+    'Vaqueros: Levi\'s y Uniqlo son las apuestas seguras. Prueba el corte recto o «relaxed taper»; en el outlet de La Roca Village (a 40 minutos de Barcelona) los encuentras rebajados.',
+    'Calidad que dura, en rebajas: Massimo Dutti, COS y Arket. Ahí sí merece la pena gastar en abrigo, chaqueta y punto.',
+    'Segunda mano: Vinted y Wallapop (marcas buenas a mitad de precio, mira las medidas) y las tiendas Humana de Barcelona.',
+    'Online con devolución fácil: Zalando, ASOS y la web de cada marca. Compra dos tallas y devuelve la que no te quede bien.',
+    'Arreglos: una costurera de barrio te cambia los bajos de un pantalón por unos 8–12 €. Hace que un pantalón barato parezca de tu talla.',
+    'Dónde sí gastar más: zapatos, chaqueta o abrigo y un vaquero que te quede perfecto. Se usan mucho, se notan mucho y duran años.',
+    'Dónde no gastar: camisetas básicas, ropa de deporte y casa, y prendas de moda de una temporada.'
+  ] },
+  { id: 'vender', t: 'Vender, donar o reciclar ropa en Barcelona', i: '♻️', l: [
+    'Vender: Vinted es lo más rápido para ropa de marca o casi nueva. Fotos con luz de día, extendida, y pon las medidas (cintura y largo) además de la talla. Wallapop funciona mejor para lotes.',
+    'Precio orientativo: entre un 30 y un 50 % de lo que costó si está como nuevo; menos si es de marca barata.',
+    'Donar: contenedores de Humana y de Roba Amiga (están por toda la ciudad) o directamente en sus tiendas. Ropa limpia y en bolsa cerrada.',
+    'Reciclar: si está rota, manchada o muy gastada, no la dones; va al contenedor de ropa para reciclaje textil o al punto verde.',
+    'La regla para decidir: si en un año no te la has puesto y no tiene un uso claro (boda, nieve…), fuera.',
+    'Si dudas, guárdala en una bolsa con la fecha. Si en tres meses no la has echado de menos, sabes qué hacer.'
   ] }
 ];
+
+// Opinión sobre cada prenda: qué hacer con ella.
+const VEREDICTOS = [['Quédatela', 'bien', '✅'], ['Quédatela, pero arréglala', 'medio', '🪡'], ['Solo para casa o deporte', 'medio', '🏠'], ['Revisar: pruébatela', 'medio', '🔍'], ['Vender', 'mal', '💰'], ['Donar', 'mal', '🎁'], ['Tirar (reciclar)', 'mal', '♻️']];
+const VER = Object.fromEntries(VEREDICTOS.map(v => [v[0], v]));
+const CORTES = ['Ajustado', 'Recto', 'Ancho', 'Cargo'];

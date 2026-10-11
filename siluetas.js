@@ -18,8 +18,14 @@ const SIL = {
   Accesorios: ['#r:8:52:84:16:8', '#r:44:49:14:22:3']
 };
 let _sid = 0;
-function prendaSVG(cat, color) {
-  const defs = SIL[cat] || SIL.Camisetas, fill = (HEX[color] || '#9AA3B2'), est = color === 'Estampado', id = 'ps' + (++_sid);
+const PANT_CORTE = { Ancho: 'M27 10 H73 L84 112 H57 L50 46 L43 112 H16 Z', Ajustado: 'M32 10 H68 L65 112 H53 L50 44 L47 112 H35 Z' };
+function prendaSVG(cat, color, corte) {
+  let defs = SIL[cat] || SIL.Camisetas;
+  if ((cat === 'Pantalones' || cat === 'Vaqueros') && corte) {
+    defs = defs.slice(); if (PANT_CORTE[corte]) defs[0] = PANT_CORTE[corte];
+    if (corte === 'Cargo') { defs[0] = PANT_CORTE.Ancho; defs.push('#r:20:58:14:16:2', '#r:66:58:14:16:2'); }
+  }
+  const fill = (HEX[color] || '#9AA3B2'), est = color === 'Estampado', id = 'ps' + (++_sid);
   const oscuro = ['Negro', 'Azul marino', 'Burdeos', 'Marrón', 'Verde oliva'].includes(color), linea = oscuro ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.28)';
   let f = est ? `url(#${id})` : fill.startsWith('linear') ? '#C73A33' : fill, body = '', det = '';
   defs.forEach((d, i) => {

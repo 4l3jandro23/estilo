@@ -253,3 +253,13 @@ details.blq li { margin: 8px 0; }
 .pz-t small { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 2px; }
 .por { margin: 12px 0 0; font-size: 15px; }
 .sheet .outfit .row-h h2 { font-size: 22px; }
+
+/* Revisión y opinión */
+.vbadge { position: absolute; bottom: 52px; right: 6px; font-style: normal; background: rgba(255, 255, 255, .92); border-radius: 8px; padding: 1px 5px; font-size: 13px; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.revis { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag.medio { background: var(--medio-soft); color: var(--medio); }
+.opinion { background: var(--cuero-soft); border-radius: 16px; padding: 12px 14px; margin: 12px 0 0; position: relative; }
+.opinion::before { content: ""; position: absolute; inset: 5px; border: 1.5px dashed var(--hilo); border-radius: 12px; opacity: .5; pointer-events: none; }
+.opinion p { margin: 6px 0 0; position: relative; }
+.veredicto-t { font: 800 18px var(--display); margin: 0 !important; }
+.veredicto-t.bien { color: var(--ok); } .veredicto-t.medio { color: var(--medio); } .veredicto-t.mal { color: var(--mal); }
