@@ -9,7 +9,7 @@ const ES = (() => {
   const META = 'estiloMeta';            // horas de cada cambio y borrados
   const FV = 'estiloFotoV';             // versión de la foto que hay en este dispositivo, por prenda
   const MD_CFG = 'midinero.sync';       // la sincronización de Mi Espacio (mismo dominio: se puede reutilizar)
-  const TYPES = { prendas: 'list', conjuntos: 'list', compras: 'list', historial: 'list', perfil: 'whole', rutina: 'map', rutinaPasos: 'whole' };
+  const TYPES = { prendas: 'list', conjuntos: 'list', compras: 'list', historial: 'list', perfil: 'whole', rutina: 'map', rutinaPasos: 'whole', semanaOc: 'whole' };
   const MAX_FOTOS = 15;                 // fotos que se suben o bajan por ciclo, para no hacer peticiones enormes
 
   const rd = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };

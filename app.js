@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null };
+const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
 D = Object.assign({}, BASE, D);
@@ -22,7 +22,7 @@ const save = () => {
   ES.touch(old, D);
 };
 
-const ui = { tab: 'hoy', cat: '', orden: 'recientes', filtro: '', q: '', ocasion: 'Diario', looks: [], lookI: 0, lock: [], conjOc: '' };
+const ui = { outSeg: 'ideas', ideaOc: '', tab: 'hoy', cat: '', orden: 'recientes', filtro: '', q: '', ocasion: 'Diario', looks: [], lookI: 0, lock: [], conjOc: '' };
 
 // ---------- fotos en IndexedDB ----------
 const FOTOS = {};
@@ -226,6 +226,7 @@ function vHoy() {
       : D.prendas.length ? `<p class="sub">No encuentro combinación con lo que tienes disponible${ui.ocasion !== 'Diario' ? ' para esta ocasión' : ''}. Hace falta al menos una prenda de arriba y una de abajo limpias y para este tiempo.</p>${cesta.length ? '<button class="pill" data-act="lavado">Ya he lavado la ropa</button>' : ''}`
       : `<p class="sub">Añade tu ropa al armario y te propongo conjuntos según el tiempo que hace y la ocasión.</p><button class="btn" data-act="nueva">＋ Añadir mi primera prenda</button>`}
     </section>
+    ${(() => { const oc = ocDia(0), x = ideaPara(oc); return x ? `<p class="sec">Idea para hoy · ${oc.toLowerCase()}</p>${outfitHTML(x, true)}<button class="pill sm" data-go="conjuntos" style="margin:-4px 0 14px">Ver más outfits y tu semana</button>` : ''; })()}
     ${cesta.length ? `<section class="card cesta"><div class="row-h"><h2>🧺 Para lavar</h2><button class="pill sm" data-act="lavado">Ya está limpia</button></div><div class="look xs">${cesta.map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div><p class="mini-t">No te las propongo hasta que las marques como limpias.</p></section>` : ''}
     ${D.historial.length ? `<section class="card"><h2>Tu semana</h2><div class="semana">${semana.map(([k, x]) => `<div class="dia ${k === hoyKey() ? 'hoy' : ''}"><small>${fmtDia(k)}</small>${x ? `<span class="mini-look">${x.prendas.slice(0, 2).map(prenda).filter(Boolean).map(thumb).join('')}</span>` : '<span class="vacio-dia">·</span>'}</div>`).join('')}</div></section>` : ''}
     <section class="card"><div class="row-h"><h2>Rutina de hoy</h2><button class="pill sm" data-act="rutinaedit">Editar</button></div>
@@ -260,9 +261,9 @@ function vArmario() {
     : `<div class="vacio grande"><div class="percha" aria-hidden="true"></div><p><b>Tu armario está vacío.</b></p><p>Haz una foto a cada prenda, colgada en una percha o extendida en la cama, con luz de día. La app detecta el color sola.</p><p class="mini-t">Empieza por lo que más te pones: con 8–10 prendas ya te propongo conjuntos.</p></div>`}`;
 }
 
-function vConjuntos() {
+function vConjuntos(sinHero) {
   const l = D.conjuntos.filter(c => !ui.conjOc || c.ocasion === ui.conjOc).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0));
-  return `${heroHTML('Conjuntos', `${D.conjuntos.length} guardados`)}
+  return `${sinHero ? '' : heroHTML('Conjuntos', `${D.conjuntos.length} guardados`)}
     <button class="btn full" data-act="nuevoconj">＋ Crear conjunto</button>
     ${D.conjuntos.length ? `<div class="chips scroll"><button class="pill sm ${!ui.conjOc ? 'on' : ''}" data-conjoc="">Todos</button>${OCASIONES.filter(o => D.conjuntos.some(c => c.ocasion === o)).map(o => `<button class="pill sm ${ui.conjOc === o ? 'on' : ''}" data-conjoc="${o}">${o}</button>`).join('')}</div>
       ${l.map(c => { const ps = c.prendas.map(prenda).filter(Boolean), nota = notaConjunto(ps), lav = ps.some(p => p.estado === 'Para lavar'), veces = D.historial.filter(h => c.prendas.every(id => h.prendas.includes(id))).length + (c.usos || 0);
@@ -270,6 +271,41 @@ function vConjuntos() {
           <p class="nota n${nota.n}">${esc(nota.t)}</p>${c.nota ? `<p class="mini-t">${esc(c.nota)}</p>` : ''}
           <div class="row"><small class="muted">${veces ? `Puesto ${veces} ${veces === 1 ? 'vez' : 'veces'}` : 'Sin estrenar'}${lav ? ' · algo está para lavar' : ''}</small><span class="sp"></span><button class="pill sm" data-conjfav="${c.id}">${c.fav ? '♥' : '♡'}</button><button class="pill sm" data-conjedit="${c.id}">Editar</button><button class="pill sm on" data-conjpuesto="${c.id}">Me lo pongo</button></div></div>`; }).join('') || '<div class="vacio"><p>No hay conjuntos para esta ocasión.</p></div>'}`
     : `<div class="vacio grande"><p><b>Guarda los conjuntos que te gustan</b> para no pensar cada mañana: uno para el trabajo, uno para una cita, uno para salir.</p><p class="mini-t">También puedes guardar el que te propone «Hoy».</p></div>`}`;
+}
+
+// ---------- outfits pensados para ti ----------
+const ocDia = off => { const w = new Date(Date.now() + off * 864e5).getDay(); return (D.semanaOc && D.semanaOc[w]) || SEMANA_OC[w]; };
+function ideaPara(oc, off = 0) {
+  const t = clima(), pal = paleta(D.perfil);
+  let l = OUTFITS.filter(o => o.oc === oc); const lc = l.filter(o => o.clima.includes(t)); if (lc.length) l = lc;
+  const sc = l.map(o => { const x = personalizar(o, pal); return { o: x, c: cruzarOutfit(x, D.prendas) }; });
+  const comp = sc.filter(s => s.c.completo), pool = comp.length ? comp : sc;
+  return pool.length ? pool[(Math.floor(Date.now() / 864e5) + off) % pool.length] : null;
+}
+function outfitPorId(id) { const o = OUTFITS.find(x => x.id === id); const x = personalizar(o, paleta(D.perfil)); return { o: x, c: cruzarOutfit(x, D.prendas) }; }
+function outfitHTML({ o, c }, compacto) {
+  const t = clima(), fuera = !o.clima.includes(t);
+  return `<article class="card outfit ${c.completo ? 'completo' : ''}">
+    <div class="row-h"><h2>${esc(o.t)}</h2><span class="tag ${c.completo ? 'bien' : ''}">${c.completo ? 'Lo tienes todo' : `Te ${c.falta.length === 1 ? 'falta 1' : `faltan ${c.falta.length}`}`}</span></div>
+    ${fuera ? `<p class="mini-t">Pensado más bien para tiempo de ${o.clima.join(' o ').toLowerCase()}.</p>` : ''}
+    <div class="piezas">${c.res.map(r => `<div class="pz">${r.p ? `<button class="lk" data-ficha="${r.p.id}">${thumb(r.p)}</button>` : `<span class="pz-vacio"><i style="background:${HEX[r.pz.col[0]]}"></i></span>`}<span class="pz-t"><b>${esc(r.pz.d)}</b><small>${r.p ? 'Tienes: ' + esc(nombre(r.p)) : `${r.pz.opc ? 'Opcional' : 'Te falta'} · ${r.pz.col.slice(0, 3).map(x => `${swatch(x)}${x.toLowerCase()}`).join(' ')}`}</small></span></div>`).join('')}</div>
+    ${compacto ? '' : `<p class="por">${esc(o.por)}</p>${o.truco ? `<p class="mini-t">💡 ${esc(o.truco)}</p>` : ''}`}
+    <div class="row">${c.completo ? `<button class="btn" data-oput="${o.id}">Me lo pongo</button><button class="pill" data-oguardar="${o.id}">Guardar</button>` : `<button class="pill on" data-ofalta="${o.id}">Añadir lo que falta a compras</button>${c.res.filter(r => r.p).length >= 2 ? `<button class="pill" data-oguardar="${o.id}">Guardar lo que tengo</button>` : ''}`}</div>
+  </article>`;
+}
+function vOutfits() {
+  const seg = `<div class="seg"><button class="${ui.outSeg === 'ideas' ? 'on' : ''}" data-seg="ideas">Ideas para ti</button><button class="${ui.outSeg === 'mios' ? 'on' : ''}" data-seg="mios">Mis conjuntos${D.conjuntos.length ? ` (${D.conjuntos.length})` : ''}</button></div>`;
+  if (ui.outSeg === 'mios') return `${heroHTML('Outfits', 'Los que has guardado')}${seg}${vConjuntos(true)}`;
+  const semana = [...Array(7)].map((_, i) => { const d = new Date(Date.now() + i * 864e5), oc = ocDia(i), id = ideaPara(oc, i); return { i, d, oc, id }; });
+  const ocs = ui.ideaOc ? [ui.ideaOc] : OCASIONES_IDEAS;
+  const pal = paleta(D.perfil), t = clima();
+  return `${heroHTML('Outfits', `Pensados para ti · ${t.toLowerCase()}${TIEMPO ? ` (${TIEMPO.min}–${TIEMPO.max}°)` : ''}`)}${seg}
+    <section class="card"><h2>Tu semana</h2><p class="mini-t" style="margin-top:0">Toca la ocasión de un día para cambiarla.</p>
+      <div class="plan">${semana.map(s => `<div class="plan-d ${s.i === 0 ? 'hoy' : ''}"><small>${s.i === 0 ? 'Hoy' : s.d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}</small><button class="pill sm" data-ocdia="${s.d.getDay()}">${s.oc}</button>${s.id ? `<button class="plan-o" data-verout="${s.id.o.id}"><b>${esc(s.id.o.t)}</b><small>${s.id.c.completo ? '✓ lo tienes' : `faltan ${s.id.c.falta.length}`}</small></button>` : ''}</div>`).join('')}</div>
+    </section>
+    ${!pal ? '<section class="card aviso"><p class="sub" style="margin:0">Con tu tono de piel y tu pelo en «Para mí», los colores de cada outfit se ordenan según lo que más te favorece.</p></section>' : ''}
+    <div class="chips scroll"><button class="pill sm ${!ui.ideaOc ? 'on' : ''}" data-ideaoc="">Todas</button>${OCASIONES_IDEAS.map(o => `<button class="pill sm ${ui.ideaOc === o ? 'on' : ''}" data-ideaoc="${o}">${o}</button>`).join('')}</div>
+    ${ocs.map(oc => { const l = OUTFITS.filter(o => o.oc === oc).map(o => outfitPorId(o.id)).sort((a, b) => (b.o.clima.includes(t) - a.o.clima.includes(t)) || (b.c.completo - a.c.completo) || (a.c.falta.length - b.c.falta.length)); return `<p class="sec">${oc}</p>${l.map(x => outfitHTML(x)).join('')}`; }).join('')}`;
 }
 
 function faltan() {
@@ -342,7 +378,7 @@ function iaHTML() {
   </details>`;
 }
 
-const VISTAS = { hoy: vHoy, armario: vArmario, conjuntos: vConjuntos, compras: vCompras, yo: vYo };
+const VISTAS = { hoy: vHoy, armario: vArmario, conjuntos: vOutfits, compras: vCompras, yo: vYo };
 function render() {
   const foco = document.activeElement && document.activeElement.id === 'buscar' ? document.activeElement.selectionStart : null;
   $('app').innerHTML = VISTAS[ui.tab]();
@@ -558,7 +594,7 @@ function marcaFecha(k) { if (!CAMBIANTES.includes(k)) return; D.perfil._f = Obje
 // ---------- eventos ----------
 document.getElementById('tabnav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) ir(b.dataset.tab); });
 $('app').addEventListener('input', e => { if (e.target.id === 'buscar') { ui.q = e.target.value; render(); } });
-$('app').addEventListener('click', e => {
+const clickApp = e => {
   const t = e.target;
   const go = t.closest('[data-go]'); if (go) return ir(go.dataset.go);
   const c = t.closest('[data-cat]'); if (c) { ui.cat = c.dataset.cat; return render(); }
@@ -569,6 +605,17 @@ $('app').addEventListener('click', e => {
   const oc = t.closest('[data-oc]'); if (oc) { ui.ocasion = oc.dataset.oc; ui.lock = []; ui.looks = []; return render(); }
   const gu = t.closest('[data-guia]'); if (gu) return openGuia(gu.dataset.guia);
   const ru = t.closest('[data-rut]'); if (ru) { const k = hoyKey(), r = D.rutina[k] = D.rutina[k] || { m: [], n: [] }, l = r[ru.dataset.rut[0]], i = +ru.dataset.rut.slice(1); if (l.includes(i)) l.splice(l.indexOf(i), 1); else l.push(i); Object.keys(D.rutina).sort().slice(0, -30).forEach(x => delete D.rutina[x]); save(); return render(); }
+  const sg = t.closest('[data-seg]'); if (sg) { ui.outSeg = sg.dataset.seg; return render(); }
+  const io = t.closest('[data-ideaoc]'); if (io) { ui.ideaOc = io.dataset.ideaoc; return render(); }
+  const od = t.closest('[data-ocdia]'); if (od) { const w = +od.dataset.ocdia, act = (D.semanaOc && D.semanaOc[w]) || SEMANA_OC[w], sig = OCASIONES_IDEAS[(OCASIONES_IDEAS.indexOf(act) + 1) % OCASIONES_IDEAS.length]; D.semanaOc = Object.assign({}, D.semanaOc, { [w]: sig }); save(); return render(); }
+  const vo = t.closest('[data-verout]'); if (vo) { const x = outfitPorId(vo.dataset.verout); const v = sheet(outfitHTML(x).replace('<article class="card outfit', '<article class="outfit')); v.addEventListener('click', clickApp); return; }
+  const op = t.closest('[data-oput]'); if (op) { const x = outfitPorId(op.dataset.oput); [...document.querySelectorAll('.veil')].forEach(v => v.close()); return ponerHoy(x.c.res.filter(r => r.p).map(r => r.p.id), x.o.oc); }
+  const og = t.closest('[data-oguardar]'); if (og) { const x = outfitPorId(og.dataset.oguardar); [...document.querySelectorAll('.veil')].forEach(v => v.close()); return openConjunto(x.c.res.filter(r => r.p).map(r => r.p.id)); }
+  const of = t.closest('[data-ofalta]'); if (of) {
+    const x = outfitPorId(of.dataset.ofalta); let n = 0;
+    for (const r of x.c.falta) { const cat = r.pz.cats[0], que = `${catSing(cat)} ${adjColor(r.pz.col[0], (SING[cat] || ['', 'm'])[1])}`.trim(); if (D.compras.some(c => !c.hecho && c.que === que)) continue; D.compras.push({ id: uid('b'), que, cat, prio: 2, precio: '', donde: '', link: '', hecho: false, fecha: new Date().toISOString(), nota: x.o.t }); n++; }
+    save(); [...document.querySelectorAll('.veil')].forEach(v => v.close()); render(); return toast(n ? `${n} ${n === 1 ? 'cosa añadida' : 'cosas añadidas'} a Compras.` : 'Ya lo tenías en la lista.', n ? ['Ver', () => ir('compras')] : null);
+  }
   const coc = t.closest('[data-conjoc]'); if (coc) { ui.conjOc = coc.dataset.conjoc; return render(); }
   const cp = t.closest('[data-conjpuesto]'); if (cp) { const cj = D.conjuntos.find(x => x.id === cp.dataset.conjpuesto); return ponerHoy(cj.prendas, cj.ocasion); }
   const cf = t.closest('[data-conjfav]'); if (cf) { const cj = D.conjuntos.find(x => x.id === cf.dataset.conjfav); cj.fav = !cj.fav; save(); return render(); }
@@ -619,7 +666,8 @@ $('app').addEventListener('click', e => {
   if (act === 'iaguardar') { const k = $('iakey').value.trim(); if (!/^sk-ant-/.test(k)) return toast('Eso no parece una clave de la API (empieza por sk-ant-).'); localStorage.setItem(IA_KEY, JSON.stringify({ key: k, on: true })); ui.iaOpen = true; render(); return toast('IA activada'); }
   if (act === 'iaon') { const c2 = iaCfg(); c2.on = !c2.on; localStorage.setItem(IA_KEY, JSON.stringify(c2)); ui.iaOpen = true; return render(); }
   if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este dispositivo?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
-});
+};
+$('app').addEventListener('click', clickApp);
 $('app').addEventListener('change', e => {
   const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; marcaFecha(i.dataset.pfin); save(); if (CAMBIANTES.includes(i.dataset.pfin)) { const y = window.scrollY; ui.datos = true; render(); window.scrollTo(0, y); } return; }
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);

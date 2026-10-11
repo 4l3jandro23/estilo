@@ -72,7 +72,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--denim); }
 .chips .lbl { align-self: center; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-left: 4px; white-space: nowrap; }
 .sp { flex: 1; }
 .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .18); vertical-align: -1px; margin-right: 5px; flex: none; }
-.tag { display: inline-flex; align-items: center; background: var(--bg); border-radius: 8px; padding: 3px 9px; font-size: 13px; color: var(--muted); font-weight: 550; }
+.tag { display: inline-flex; align-items: center; white-space: nowrap; flex: none; background: var(--bg); border-radius: 8px; padding: 3px 9px; font-size: 13px; color: var(--muted); font-weight: 550; }
 .tag.bien { background: var(--ok-soft); color: var(--ok); }
 .tag.mal { background: var(--mal-soft); color: var(--mal); }
 .tag.etiq { background: var(--cuero-soft); color: var(--cuero); }
@@ -225,3 +225,27 @@ details.blq li { margin: 8px 0; }
   @keyframes tostada { from { transform: translate(-50%, 10px); opacity: 0; } }
   @keyframes lat { to { opacity: .55; } }
 }
+
+/* Outfits */
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--card); border-radius: 14px; padding: 4px; margin: 0 0 14px; box-shadow: var(--sh); }
+.seg button { border: 0; background: none; border-radius: 11px; padding: 9px 6px; font-weight: 650; color: var(--muted); }
+.seg button.on { background: var(--denim); color: #fff; }
+@media (prefers-color-scheme: dark) { .seg button.on { color: #0F131A; } }
+.plan { display: grid; gap: 8px; margin-top: 10px; }
+.plan-d { display: grid; grid-template-columns: 54px 86px minmax(0, 1fr); align-items: center; gap: 8px; }
+.plan-d .pill { justify-content: center; }
+.plan-d > small { color: var(--muted); font-size: 13px; text-transform: capitalize; }
+.plan-d.hoy > small { color: var(--denim); font-weight: 800; }
+.plan-o { border: 0; background: var(--bg); border-radius: 12px; padding: 7px 10px; text-align: left; min-width: 0; }
+.plan-o b { display: block; font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plan-o small { color: var(--muted); font-size: 12px; }
+.outfit.completo { box-shadow: var(--sh), inset 0 0 0 2px var(--ok-soft); }
+.piezas { display: grid; gap: 8px; margin: 10px 0 4px; }
+.pz { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; }
+.pz .lk img, .pz .lk .nofoto { aspect-ratio: 1; }
+.pz-vacio { width: 52px; height: 52px; border-radius: 14px; border: 2px dashed var(--hilo); display: grid; place-items: center; }
+.pz-vacio i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .15); }
+.pz-t b { display: block; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.pz-t small { color: var(--muted); font-size: 13px; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 2px; }
+.por { margin: 12px 0 0; font-size: 15px; }
+.sheet .outfit .row-h h2 { font-size: 22px; }
