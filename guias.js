@@ -99,5 +99,41 @@ const GUIAS = [
     'Gira un poco el cuerpo y no la cara: queda más natural que de frente total.',
     'Adelanta un poco la barbilla y bájala ligeramente: define la mandíbula.',
     'Sonrisa de verdad: piensa en algo que te haga gracia justo antes.'
+  ] },
+  { id: 'piel-grasa-seca', t: 'Piel que brilla pero pica y se reseca', i: '🧴', l: [
+    'Es muy común: piel grasa pero deshidratada y sensible. Te pica y se reseca porque la barrera de la piel está dañada, aunque brille.',
+    'Causas típicas: lavarte demasiado o con un limpiador fuerte (si la cara «chirría» al lavarla, es demasiado), no usar hidratante porque «ya soy grasa» y productos que irritan, como colonia o aftershave en la cara.',
+    'Si te lavas de más, la piel se defiende produciendo más grasa y a la vez se reseca. Es un círculo que se corta cuidándola menos y mejor.',
+    'Rutina suave durante 2–3 semanas: limpiador suave sin perfume (máximo dos veces al día, con agua tibia), hidratante ligera con ceramidas o ácido hialurónico y protector solar fluido por la mañana.',
+    'Hidrátate siempre, también por la mañana y también si brillas. Sin hidratar, la piel se reseca y brilla aún más.',
+    'Nada de exfoliantes, ácidos fuertes ni productos nuevos todos a la vez. Introduce uno cada una o dos semanas para saber cuál te sienta mal.',
+    'Después de afeitarte, crema sin alcohol. Sin colonia ni aftershave en la cara.',
+    'No te rasques. Si te pica en la barba, evita los aceites muy perfumados.'
+  ] },
+  { id: 'dermatitis', t: 'Picor, rojez y descamación: ¿dermatitis seborreica?', i: '🩺', l: [
+    'Es muy frecuente en hombres con barba y se parece a lo que describes: picor, rojez en mejillas y nariz, y piel que brilla pero se descama.',
+    'Suele aparecer en las alas de la nariz, entre las cejas, la barba, detrás de las orejas y el cuero cabelludo.',
+    'Esta guía no es un diagnóstico: un dermatólogo lo distingue en dos minutos y tiene tratamiento. Merece la pena ir, sobre todo si dura.',
+    'Ve cuanto antes si, tras 3–4 semanas de rutina suave, sigue picando; si la descamación o la rojez no se van; si pasa también en el cuero cabelludo o las cejas; o si te pica en la zona del injerto.',
+    'Si te has hecho un injerto de pelo, díselo: lo tendrá en cuenta para recomendarte.',
+    'Mientras tanto, no te rasques, no uses productos con alcohol y no cambies de crema cada semana.'
+  ] },
+  { id: 'color-ropa', t: 'Color de la ropa y tu piel: lo que es cierto y lo que no', i: '🎨', l: [
+    'Es cierto: el color de la ropa cerca de la cara cambia cómo te ve la gente. Se llama colorimetría y lo que importa es el contraste entre tu piel, tu pelo y tus ojos.',
+    'Con contraste alto (piel clara y pelo muy oscuro), te favorecen los colores intensos u oscuros: negro, azul marino, burdeos, blanco y verde botella. Los pálidos (gris claro, beis, lila) te apagan.',
+    'El subtono (si tu piel tira a cálido o a frío) también influye, sobre todo en tonos tierra, verdes y pasteles.',
+    'No es tan sólido: el tipo de piel (grasa, seca o sensible) no cambia qué ropa te queda mejor. Eso es cuidado de la piel.',
+    'Lo de «persona de invierno, otoño, primavera o verano» se ha hecho muy popular, pero tiene poca base científica. Úsalo como guía, no como regla.',
+    'Lo que más cambia cómo te queda la ropa es la talla, el corte y tu silueta, mucho más que el color.',
+    'Si dudas con un color, pruébatelo cerca de la cara con buena luz natural y compara con uno de tu paleta.'
+  ] },
+  { id: 'tejidos', t: 'Tejidos para piel sensible o con picor', i: '🧵', l: [
+    'Tu tipo de piel no cambia qué ropa te favorece, pero sí qué tejidos toleras. Con la piel sensible, el tejido se nota más que el color.',
+    'Lo que mejor suele ir: algodón, lino y punto fino.',
+    'Lo que más irrita: lana áspera (pica en cuello y muñecas), poliéster pegado al cuerpo, que suda y encierra calor, y las etiquetas.',
+    'Si te encanta un jersey de lana, ponte una camiseta de algodón debajo.',
+    'Lava la ropa con detergente sin perfume y aclara bien: restos de jabón o suavizante perfumado irritan más de lo que parece.',
+    'Ropa nueva: lávala antes de estrenarla, para quitar los restos de fábrica.',
+    'En verano, el lino y el algodón ligero transpiran mejor y evitan los granitos de sudor en la espalda y el pecho.'
   ] }
 ];

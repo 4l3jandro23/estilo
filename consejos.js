@@ -58,6 +58,10 @@ function contraste(p) {
 }
 
 /* Devuelve [[título, [consejos]]] adaptados al perfil. */
+// Tejidos: con piel sensible el tejido se nota más que el color.
+function ropaPiel(out) {
+  out.push(['Tu ropa y tu piel sensible', ['Mejor algodón, lino y punto fino. Evita la lana áspera pegada al cuello y el poliéster ajustado, que irrita y suda.', 'Si te gusta un jersey de lana, ponte una camiseta de algodón debajo.', 'Detergente sin perfume, bien aclarado, y lava la ropa nueva antes de estrenarla.']]);
+}
 function consejos(p) {
   const out = [], alt = +p.altura || 0, est = p.estilo || [];
   if (!p.piel && !p.complexion && !p.cara) return out;
@@ -111,7 +115,8 @@ function consejos(p) {
   if (tp.startsWith('Grasa')) pi.push('Piel grasa: limpiador en gel por la mañana y por la noche, e hidratante ligera sin aceites (que ponga «oil free» o «no comedogénico»). Aunque brille, necesita hidratación.');
   if (tp.startsWith('Seca')) pi.push('Piel seca: limpiador cremoso suave y una hidratante más rica por la noche. Evita el agua muy caliente en la cara.');
   if (tp.startsWith('Mixta')) pi.push('Piel mixta: limpiador en gel suave e hidratante ligera. Si te brilla la zona T, un papel matificante para salir de noche funciona.');
-  if (tp.startsWith('Sensible')) pi.push('Piel sensible: productos sin perfume y con pocos ingredientes. Prueba cada producto nuevo en una zona pequeña unos días.');
+  if (tp.startsWith('Sensible')) pi.push('Piel sensible: productos sin perfume y con pocos ingredientes. Prueba cada producto nuevo en una zona pequeña unos días.', 'Si además brillas, es piel grasa deshidratada: no la seques más. Limpiador suave dos veces al día como máximo e hidratante siempre, también por la mañana.', 'Si el picor, la rojez o la descamación duran más de 3–4 semanas, ve al dermatólogo (en la nariz, las cejas o la barba puede ser dermatitis seborreica).', 'Mira «Piel que brilla pero pica y se reseca» y «Picor, rojez y descamación» en las guías.');
+  if (tp.startsWith('Sensible') || p.granos === 'A menudo') ropaPiel(out);
   if (tp.startsWith('Normal')) pi.push('Piel normal: limpiador suave, hidratante y protector solar. Con eso basta.');
   if (p.granos === 'A veces' || p.granos === 'A menudo') pi.push('Para los granos, busca productos con niacinamida o ácido salicílico, y no los revientes (dejan marca).', p.granos === 'A menudo' ? 'Si te salen a menudo, ve al dermatólogo: hay tratamientos que funcionan mucho mejor que cualquier crema de farmacia. Es un cambio enorme en poco tiempo.' : 'Si no mejoran en dos meses, consulta con el dermatólogo.');
   pi.push('Protector solar facial todos los días, también en invierno: es lo que más cuida la piel a largo plazo.', 'Labios: bálsamo labial. Labios agrietados se notan mucho de cerca.');
