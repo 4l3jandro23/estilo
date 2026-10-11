@@ -9,7 +9,11 @@ const KEY = 'estiloDatos';
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
 D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, D);
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { toast('No se ha podido guardar: el móvil no tiene espacio.'); } };
+const save = () => {
+  let old = null; try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { return toast('No se ha podido guardar: el móvil no tiene espacio.'); }
+  ES.touch(old, D);
+};
 
 const ui = { tab: 'hoy', cat: '', look: null, sel: [] };
 
@@ -28,6 +32,10 @@ function comprimir(file) {
     img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('foto')); };
     img.src = url;
   });
+}
+
+function reducir(url, m = 600) {
+  return new Promise(ok => { const img = new Image(); img.onload = () => { const k = Math.min(1, m / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); ok(c.toDataURL('image/jpeg', .72)); }; img.onerror = () => ok(url); img.src = url; });
 }
 
 // ---------- color automático (gratis, en el móvil) ----------
@@ -180,9 +188,24 @@ function vYo() {
       <details class="card blq"><summary>Productos para mí</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
       : '<div class="card tip"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos.</p></div>'}
     <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>${PERFIL_CAMPOS.map(campo).join('')}</details>
+    ${syncHTML()}
     ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub">Todo (también las fotos) se guarda solo en este móvil. Haz una copia de vez en cuando por si cambias de móvil o borras el navegador.</p>
       <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>`;
+}
+
+function hace(t) { if (!t) return 'nunca'; const s = (Date.now() - t) / 1000; return s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.round(s / 60)} min` : s < 86400 ? `hace ${Math.round(s / 3600)} h` : new Date(t).toLocaleDateString('es-ES'); }
+function syncHTML() {
+  const st = ES.status(), otra = ES.fromOtra();
+  return `<details class="card blq" id="syncbox" ${ui.syncOpen || !st.on ? 'open' : ''}><summary>Verlo en el móvil y en el PC</summary>
+    ${st.on ? `<p class="sub" style="margin-top:10px">${st.busy ? 'Sincronizando…' : st.msg ? '⚠️ ' + esc(st.msg) : 'Sincronizado ' + hace(st.last) + '.'} Lo que cambies aquí aparece en tus otros dispositivos, y al revés. Las fotos viajan en versión reducida.</p>
+        <div class="row"><button class="pill on" data-act="syncya">Sincronizar ahora</button><button class="pill" data-act="synccode">Copiar código para otro dispositivo</button><button class="pill" data-act="syncoff">Desconectar</button></div>`
+      : `<p class="sub" style="margin-top:10px">Para tener tu armario en el móvil, el PC o donde quieras. Se guarda cifrado en tu GitHub, como Mi Espacio y Cimientos: GitHub solo ve un bloque ilegible.</p>
+        ${otra ? '<div class="row"><button class="pill on" data-act="syncotra">Usar la misma conexión que Mi Espacio</button></div><p class="mini">O pega el código</p>' : ''}
+        <label class="campo"><span>Código de vinculación (empieza por MD1.)</span><input id="synccode" autocomplete="off" placeholder="MD1.…"></label>
+        <div class="row"><button class="pill ${otra ? '' : 'on'}" data-act="synclink">Vincular</button></div>
+        <p class="mini">El código lo tienes en Mi Espacio (Más → Sincronizar y copias) o en Cimientos.</p>`}
+  </details>`;
 }
 
 function iaHTML() {
@@ -239,7 +262,8 @@ function openPrenda(id) {
     if (!cat) return toast('Elige el tipo de prenda.');
     keep();
     const o = { id: id || uid('p'), nombre: p.nombre.trim(), cat, color, temp, notas: p.notas.trim(), usos: p.usos || 0, fecha: p.fecha || new Date().toISOString() };
-    if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); } catch (er) { toast('No se ha podido guardar la foto: puede que el móvil esté sin espacio.'); } }
+    if (p.fv) o.fv = p.fv;
+    if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (er) { toast('No se ha podido guardar la foto: puede que el móvil esté sin espacio.'); } }
     D.prendas = id ? D.prendas.map(x => x.id === id ? o : x) : D.prendas.concat(o); save(); v.close(); ui.look = null; render(); toast(id ? 'Guardada' : 'Añadida al armario');
   });
 }
@@ -313,6 +337,16 @@ $('app').addEventListener('click', e => {
   if (act === 'puesto') { marcarPuesto(ui.look); return toast('Apuntado. ¡A por el día!'); }
   if (act === 'guardarlook') return openConjunto(ui.look);
   if (act === 'exportar') return exportar();
+  if (act === 'syncya') { ui.syncOpen = true; return ES.sync(); }
+  if (act === 'synccode') { try { navigator.clipboard.writeText(ES.code()); toast('Código copiado. Pégalo en Estilo en tu otro dispositivo.'); } catch (er) {} return; }
+  if (act === 'syncoff') { if (!confirm('¿Desconectar la sincronización en este dispositivo? Tus datos se quedan aquí.')) return; ES.off(); ui.syncOpen = true; return render(); }
+  if (act === 'syncotra' || act === 'synclink') {
+    const o = act === 'syncotra' ? ES.fromOtra() : ES.parseCode($('synccode').value);
+    if (!o) return toast('Ese código no es válido. Cópialo entero, empieza por MD1.');
+    ui.syncOpen = true; a.disabled = true; a.textContent = 'Conectando…';
+    ES.link(o).then(() => { render(); toast('Conectado. Tu armario ya se sincroniza.'); }).catch(er => { render(); toast(er.message); });
+    return;
+  }
   if (act === 'iaguardar') { const k = $('iakey').value.trim(); if (!/^sk-ant-/.test(k)) return toast('Eso no parece una clave de la API (empieza por sk-ant-).'); localStorage.setItem(IA_KEY, JSON.stringify({ key: k, on: true })); ui.iaOpen = true; render(); return toast('IA activada'); }
   if (act === 'iaon') { const c = iaCfg(); c.on = !c.on; localStorage.setItem(IA_KEY, JSON.stringify(c)); ui.iaOpen = true; return render(); }
   if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este móvil?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
@@ -332,10 +366,27 @@ async function importar(f) {
     if (!confirm('Esto sustituye lo que tienes ahora en la app por la copia. ¿Seguir?')) return;
     D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, j.datos); save();
     for (const [k, v] of Object.entries(j.fotos || {})) await fotoPut(k, v);
+    const ahora = Date.now(); D.prendas.forEach(p => { if (FOTOS[p.id]) { p.fv = ahora; ES.fotoLocal(p.id, ahora); } }); save();
     ui.look = null; render(); toast('Copia restaurada');
   } catch (e) { toast('Ese archivo no es una copia de Estilo.'); }
 }
 
-fotosCargar().then(render);
+ES.init({
+  get: () => D,
+  set: d => { D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, D, d); D.perfil = D.perfil || {}; D.rutina = D.rutina || {}; try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} },
+  fotoGet: id => FOTOS[id], fotoPut, fotoDel: id => fotoDel(id).catch(() => {}), reducir
+});
+ES.onChange = s => {
+  if (s === 'changed') { ui.look = null; render(); return; }
+  const box = document.getElementById('syncbox'); if (box && ui.tab === 'yo') { const y = window.scrollY; ui.syncOpen = box.open; render(); window.scrollTo(0, y); }
+};
+fotosCargar().then(() => {
+  // Prendas con foto de antes de la sincronización: se les pone versión para que viajen.
+  let cambia = false; const ahora = Date.now();
+  D.prendas.forEach(p => { if (FOTOS[p.id] && !p.fv) { p.fv = ahora; ES.fotoLocal(p.id, ahora); cambia = true; } });
+  if (cambia) save();
+  render(); ES.sync();
+});
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ES.sync(); });
 render();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js').catch(() => {});

@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'estilo-v2';
-const APP_SHELL = ['./', './index.html', './app.css', './app.js', './consejos.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
+const CACHE_VERSION = 'estilo-v3';
+const APP_SHELL = ['./', './index.html', './app.css', './app.js', './consejos.js', './esync.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE_VERSION).then(c => c.addAll(APP_SHELL)).then(() => self.skipWaiting()));
