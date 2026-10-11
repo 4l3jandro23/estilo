@@ -8,6 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
+const VERSION = 12;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -362,7 +363,7 @@ function vYo() {
     ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub" style="margin-top:10px">Un archivo con todo (también las fotos) por si cambias de dispositivo o quieres guardarlo aparte.</p>
       <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>
-    <p class="pie">Estilo · tus datos se quedan en tus dispositivos${ES.status().on ? ' y cifrados en tu GitHub' : ''}.</p>`;
+    <p class="pie">Estilo · versión ${VERSION} · tus datos se quedan en tus dispositivos${ES.status().on ? ' y cifrados en tu GitHub' : ''}.</p>`;
 }
 
 function hace(t) { if (!t) return 'nunca'; const s = (Date.now() - t) / 1000; return s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.round(s / 60)} min` : s < 86400 ? `hace ${Math.round(s / 3600)} h` : new Date(t).toLocaleDateString('es-ES'); }
@@ -604,6 +605,14 @@ function openRutina() {
   v.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id && e.target.id.startsWith('r_')) { e.preventDefault(); v.querySelector(`[data-radd="${e.target.id.slice(2)}"]`).click(); } });
 }
 
+// Lo que se pega desde el chat. Si no se puede leer tal cual, se prueba arreglando lo que a veces cambia el móvil
+// al copiar: comillas tipográficas “ ” en vez de rectas y espacios invisibles.
+function leerBloque(tipo) {
+  const raw = $('pegar').value.replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/\u00A0/g, ' ');
+  const re = tipo === 'ESTILO1' ? /ESTILO1\s*(\{[\s\S]*\})/ : /ESTILO2\s*(\{[\s\S]*\})/;
+  for (const t of [raw, raw.replace(/[\u201C\u201D\u201E\u2033]/g, '"')]) { const m = t.match(re); if (!m) continue; try { return JSON.parse(m[1]); } catch (e) {} }
+  return null;
+}
 function marcaFecha(k) { if (!CAMBIANTES.includes(k)) return; D.perfil._f = Object.assign({}, D.perfil._f); if (D.perfil[k] == null) delete D.perfil._f[k]; else D.perfil._f[k] = new Date().toISOString(); }
 
 // ---------- eventos ----------
@@ -658,7 +667,7 @@ const clickApp = e => {
   if (act === 'exportar') return exportar();
   if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
   if (act === 'pegar' && /ESTILO2/.test($('pegar').value)) {
-    const m = $('pegar').value.match(/ESTILO2\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
+    let o = leerBloque('ESTILO2');
     if (o && !o.prendas && Array.isArray(o.compras)) o.prendas = [];
     if (!o || !Array.isArray(o.prendas)) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO2 hasta la última llave.');
     let n = 0, dup = 0, mal = 0;
@@ -685,7 +694,7 @@ const clickApp = e => {
     return toast(partes.join(' · ') + '.', Array.isArray(o.compras) ? ['Ver', () => ir('compras')] : null);
   }
   if (act === 'pegar') {
-    const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
+    const o = leerBloque('ESTILO1');
     if (!o) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO1 hasta la última llave.');
     let n = 0;
     for (const c of PERFIL_CAMPOS) {
