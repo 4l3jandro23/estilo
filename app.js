@@ -187,12 +187,12 @@ function vYo() {
     : `<label class="campo"><span>${esc(c.t)}${cuando(c.k)}</span><input data-pfin="${c.k}" type="${c.tipo === 'num' ? 'number' : 'text'}" inputmode="${c.tipo === 'num' ? 'numeric' : 'text'}" value="${esc(p[c.k] || '')}" ${c.u ? `placeholder="${c.u}"` : ''} autocomplete="off"></label>`;
   const viejos = CAMBIANTES.filter(k => p[k] && p._f && p._f[k] && Date.now() - Date.parse(p._f[k]) > 90 * 864e5);
   return `<section class="hero"><small>Todo se adapta a lo que pongas aquí</small><h1>Para mí</h1></section>
+    <div class="card destaca"><h2>Pegar datos de Claude</h2><p class="sub">Si Claude te ha dado un bloque que empieza por ESTILO1, pégalo aquí y se rellenan tus datos de golpe.</p><textarea id="pegar" rows="3" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div></div>
     ${viejos.length ? `<div class="card destaca"><h2>¿Sigue todo igual?</h2><p class="sub">Hace más de tres meses que pusiste: ${viejos.map(k => PERFIL_CAMPOS.find(c => c.k === k).t.toLowerCase()).join(', ')}. Si ha cambiado, actualízalo en «Mis datos» y los consejos se ajustan.</p><button class="pill" data-act="sigueigual">Sigue igual</button></div>` : ''}
     ${cs.length ? `<p class="sec">Mis consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
       <details class="card blq"><summary>Productos para mí</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
       : '<div class="card tip"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos.</p></div>'}
-    <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>
-      <div class="campo"><span>Pegar datos que te ha dado Claude</span><small>Empiezan por ESTILO1. Rellenan tus datos de golpe.</small><textarea id="pegar" rows="2" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div></div>${PERFIL_CAMPOS.map(campo).join('')}</details>
+    <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>${PERFIL_CAMPOS.map(campo).join('')}</details>
     ${syncHTML()}
     ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub">Todo (también las fotos) se guarda solo en este móvil. Haz una copia de vez en cuando por si cambias de móvil o borras el navegador.</p>
