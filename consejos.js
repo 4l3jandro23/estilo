@@ -9,6 +9,8 @@ const NEUTROS = ['Blanco', 'Negro', 'Gris', 'Azul marino', 'Azul claro', 'Vaquer
 const TEMPS = ['Todo el año', 'Calor', 'Frío'];
 const OCASIONES = ['Diario', 'Trabajo', 'Cita', 'Fiesta', 'Deporte'];
 
+// Datos que cambian con el tiempo: la app guarda cuándo los pusiste y te pregunta si siguen igual.
+const CAMBIANTES = ['peso', 'complexion', 'barba', 'tipopiel', 'granos', 'presupuesto', 'entradas'];
 const PERFIL_CAMPOS = [
   { k: 'altura', t: 'Altura', tipo: 'num', u: 'cm' },
   { k: 'peso', t: 'Peso aproximado', tipo: 'num', u: 'kg' },
@@ -19,8 +21,8 @@ const PERFIL_CAMPOS = [
   { k: 'pelotipo', t: 'Tipo de pelo', op: ['Liso', 'Ondulado', 'Rizado'] },
   { k: 'entradas', t: 'Entradas o poco pelo arriba', op: ['No', 'Algo', 'Bastantes'] },
   { k: 'cara', t: 'Forma de la cara', op: ['Ovalada', 'Redonda', 'Cuadrada', 'Alargada', 'No lo sé'], ayuda: 'Mírate al espejo con el pelo hacia atrás. Redonda: casi igual de ancha que de larga y sin ángulos. Cuadrada: mandíbula marcada. Alargada: bastante más larga que ancha. Ovalada: algo más larga que ancha, sin ángulos marcados.' },
-  { k: 'barba', t: 'Barba', op: ['Afeitado', 'De pocos días', 'Corta', 'Larga', 'Me sale poca o a calvas'] },
-  { k: 'gafas', t: 'Gafas', op: ['No', 'Sí'] },
+  { k: 'barba', t: 'Barba', op: ['Afeitado', 'De pocos días', 'Corta', 'Larga', 'Unas veces barba, otras afeitado', 'Me sale poca o a calvas'] },
+  { k: 'gafas', t: 'Gafas', op: ['No', 'Sí, siempre', 'Solo con pantallas o para trabajar'] },
   { k: 'tipopiel', t: 'Tu piel', op: ['Normal', 'Grasa (brilla)', 'Seca (tirante)', 'Mixta (brilla en la frente y nariz)', 'Sensible (se irrita)'] },
   { k: 'granos', t: 'Granos o rojeces', op: ['No', 'A veces', 'A menudo'] },
   { k: 'presupuesto', t: 'Presupuesto al mes para ropa y cuidado', op: ['Menos de 30 €', '30–80 €', '80–150 €', 'Más de 150 €'] },
@@ -97,11 +99,12 @@ function consejos(p) {
   const ba = [];
   if (p.barba === 'Me sale poca o a calvas') ba.push('Si la barba te sale poco poblada, te quedará mejor afeitado o una barba de pocos días (2–4 mm) que una barba larga a calvas.');
   else if (p.barba && p.barba !== 'Afeitado') ba.push({ 'Redonda': 'Para cara redonda: algo más de largo en la barbilla y los lados más cortos. Alarga la cara.', 'Alargada': 'Para cara alargada: más volumen en los lados y corta en la barbilla.', 'Cuadrada': 'Para cara cuadrada: una barba corta y uniforme marca la mandíbula.', 'Ovalada': 'Para cara ovalada: casi cualquier barba te va. Mantenla con la línea limpia.' }[p.cara] || 'Mantén la barba con forma: líneas limpias en el cuello y las mejillas.', 'La línea del cuello: afeita por debajo de un dedo por encima de la nuez. Es lo que más diferencia una barba cuidada de una descuidada.', 'Una recortadora con peine es la mejor inversión. Y un aceite de barba si te pica o está áspera.');
+  if (p.barba === 'Unas veces barba, otras afeitado') ba.push('Alternar es buena idea: el afeitado limpio queda más fresco y la barba da más presencia y marca la mandíbula. Fíjate en qué fotos te ves mejor y úsalo a propósito: por ejemplo, barba para salir o para una cita y afeitado cuando quieras un aire más limpio.', 'Lo que no funciona es el punto intermedio descuidado (barba de 5–7 días sin perfilar). Si estás dejándola crecer, perfila al menos la línea del cuello desde el tercer o cuarto día.', 'Los días que te afeites: después de la ducha, a favor del pelo si se te irrita, y crema hidratante sin alcohol después.');
   if (p.barba === 'Afeitado') ba.push('Afeitado: hazlo después de la ducha (el pelo está más blando) y a favor del pelo si se te irrita. Una crema hidratante sin alcohol después.');
   if (ba.length) out.push(['Tu barba', ba]);
 
   // Gafas
-  if (p.gafas === 'Sí') out.push(['Tus gafas', [{ 'Redonda': 'Cara redonda: monturas rectangulares o cuadradas, que dan ángulos.', 'Cuadrada': 'Cara cuadrada: monturas redondeadas u ovaladas, que suavizan.', 'Alargada': 'Cara alargada: monturas con altura (más altas que estrechas), que acortan.', 'Ovalada': 'Cara ovalada: casi cualquier montura te va. Busca que el ancho sea igual al de tu cara.' }[p.cara] || 'Elige monturas de forma contraria a tu cara: si es redondeada, monturas rectas; si es angulosa, redondeadas.', 'La parte de arriba de la montura debería seguir más o menos la línea de las cejas.', 'Unas gafas que te gusten cambian la cara más que cualquier otra cosa. Merece la pena gastar algo más ahí.']]);
+  if (p.gafas && p.gafas !== 'No') out.push(['Tus gafas', [...(p.gafas.startsWith('Solo') ? ['Como solo las usas con pantallas, tienen menos peso en tu imagen fuera del trabajo. Aun así, en el trabajo te ven con ellas a diario: merece la pena una montura que te favorezca.', 'Pregunta en la óptica por el filtro para pantallas solo si notas cansancio en la vista; lo que más ayuda es descansar la mirada cada 20 minutos.'] : []), { 'Redonda': 'Cara redonda: monturas rectangulares o cuadradas, que dan ángulos.', 'Cuadrada': 'Cara cuadrada: monturas redondeadas u ovaladas, que suavizan.', 'Alargada': 'Cara alargada: monturas con altura (más altas que estrechas), que acortan.', 'Ovalada': 'Cara ovalada: casi cualquier montura te va. Busca que el ancho sea igual al de tu cara.' }[p.cara] || 'Elige monturas de forma contraria a tu cara: si es redondeada, monturas rectas; si es angulosa, redondeadas.', 'La parte de arriba de la montura debería seguir más o menos la línea de las cejas.', 'Unas gafas que te gusten cambian la cara más que cualquier otra cosa. Merece la pena gastar algo más ahí.']]);
 
   // Piel
   const pi = [], tp = p.tipopiel || '';
@@ -138,7 +141,7 @@ function productos(p) {
   if (p.granos === 'A veces' || p.granos === 'A menudo') l.push(['Para los granos', 'Un sérum de niacinamida o un tratamiento con ácido salicílico para las zonas con granos. Unos 8–20 €. Si van a más, dermatólogo.']);
   if (p.pelotipo === 'Rizado' || p.pelotipo === 'Ondulado') l.push(['Pelo', 'Acondicionador y una crema de rizos o espuma. Unos 6–15 €.']);
   else l.push(['Pelo', 'Cera mate o polvos texturizantes. Un poquito en las manos, repartido. Unos 6–15 €.']);
-  if (p.barba && !['Afeitado'].includes(p.barba)) l.push(['Barba', 'Recortadora con peines de varias medidas (una tipo Philips OneBlade o una recortadora de barba básica). Unos 25–50 €. Y aceite de barba si te pica.']);
+  if (p.barba && p.barba !== 'Afeitado') l.push(['Barba', 'Recortadora con peines de varias medidas (una tipo Philips OneBlade o una recortadora de barba básica). Unos 25–50 €. Y aceite de barba si te pica.']);
   l.push(['Desodorante y colonia', 'Desodorante sin alcohol si se te irrita. Colonia: dos toques (cuello y muñeca), no más. Prueba en tienda, en tu piel, antes de comprar.'], ['Labios', 'Bálsamo labial sin color. Unos 3–5 €.']);
   return l;
 }

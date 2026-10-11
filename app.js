@@ -9,6 +9,7 @@ const KEY = 'estiloDatos';
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
 D = Object.assign({ prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {} }, D);
+if (D.perfil.gafas === 'Sí') D.perfil.gafas = 'Sí, siempre';
 const save = () => {
   let old = null; try { old = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
   try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { return toast('No se ha podido guardar: el móvil no tiene espacio.'); }
@@ -181,13 +182,17 @@ function vCompras() {
 
 function vYo() {
   const p = D.perfil, cs = consejos(p), pr = productos(p);
-  const campo = c => c.op ? `<div class="campo"><span>${esc(c.t)}</span>${c.ayuda ? `<small>${esc(c.ayuda)}</small>` : ''}<div class="chips">${c.op.map(o => { const on = c.multi ? (p[c.k] || []).includes(o) : p[c.k] === o; return `<button class="pill ${on ? 'on' : ''}" data-pf="${c.k}" data-v="${esc(o)}">${esc(o)}</button>`; }).join('')}</div></div>`
-    : `<label class="campo"><span>${esc(c.t)}</span><input data-pfin="${c.k}" type="${c.tipo === 'num' ? 'number' : 'text'}" inputmode="${c.tipo === 'num' ? 'numeric' : 'text'}" value="${esc(p[c.k] || '')}" ${c.u ? `placeholder="${c.u}"` : ''} autocomplete="off"></label>`;
+  const cuando = k => CAMBIANTES.includes(k) && p._f && p._f[k] ? ` <small class="cuando">desde ${new Date(p._f[k]).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}</small>` : '';
+  const campo = c => c.op ? `<div class="campo"><span>${esc(c.t)}${cuando(c.k)}</span>${c.ayuda ? `<small>${esc(c.ayuda)}</small>` : ''}<div class="chips">${c.op.map(o => { const on = c.multi ? (p[c.k] || []).includes(o) : p[c.k] === o; return `<button class="pill ${on ? 'on' : ''}" data-pf="${c.k}" data-v="${esc(o)}">${esc(o)}</button>`; }).join('')}</div></div>`
+    : `<label class="campo"><span>${esc(c.t)}${cuando(c.k)}</span><input data-pfin="${c.k}" type="${c.tipo === 'num' ? 'number' : 'text'}" inputmode="${c.tipo === 'num' ? 'numeric' : 'text'}" value="${esc(p[c.k] || '')}" ${c.u ? `placeholder="${c.u}"` : ''} autocomplete="off"></label>`;
+  const viejos = CAMBIANTES.filter(k => p[k] && p._f && p._f[k] && Date.now() - Date.parse(p._f[k]) > 90 * 864e5);
   return `<section class="hero"><small>Todo se adapta a lo que pongas aquí</small><h1>Para mí</h1></section>
+    ${viejos.length ? `<div class="card destaca"><h2>¿Sigue todo igual?</h2><p class="sub">Hace más de tres meses que pusiste: ${viejos.map(k => PERFIL_CAMPOS.find(c => c.k === k).t.toLowerCase()).join(', ')}. Si ha cambiado, actualízalo en «Mis datos» y los consejos se ajustan.</p><button class="pill" data-act="sigueigual">Sigue igual</button></div>` : ''}
     ${cs.length ? `<p class="sec">Mis consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
       <details class="card blq"><summary>Productos para mí</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
       : '<div class="card tip"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos.</p></div>'}
-    <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>${PERFIL_CAMPOS.map(campo).join('')}</details>
+    <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>
+      <div class="campo"><span>Pegar datos que te ha dado Claude</span><small>Empiezan por ESTILO1. Rellenan tus datos de golpe.</small><textarea id="pegar" rows="2" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div></div>${PERFIL_CAMPOS.map(campo).join('')}</details>
     ${syncHTML()}
     ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub">Todo (también las fotos) se guarda solo en este móvil. Haz una copia de vez en cuando por si cambias de móvil o borras el navegador.</p>
@@ -314,6 +319,8 @@ function openCompra(pre) {
 
 function marcarPuesto(ids) { ids.forEach(id => { const p = prenda(id); if (p) p.usos = (p.usos || 0) + 1; }); save(); }
 
+function marcaFecha(k) { if (!CAMBIANTES.includes(k)) return; D.perfil._f = Object.assign({}, D.perfil._f); if (D.perfil[k] == null) delete D.perfil._f[k]; else D.perfil._f[k] = new Date().toISOString(); }
+
 // ---------- eventos ----------
 document.getElementById('tabnav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) ir(b.dataset.tab); });
 $('app').addEventListener('click', e => {
@@ -327,7 +334,7 @@ $('app').addEventListener('click', e => {
   const fa = t.closest('[data-falta]'); if (fa) return openCompra(faltan()[+fa.dataset.falta].n);
   const co = t.closest('[data-comp]'); if (co) { const x = D.compras.find(y => y.id === co.dataset.comp); x.hecho = !x.hecho; save(); render(); if (x.hecho) toast('Comprado. Añádelo al armario cuando lo tengas.'); return; }
   const cdl = t.closest('[data-compdel]'); if (cdl) { D.compras = D.compras.filter(y => y.id !== cdl.dataset.compdel); save(); return render(); }
-  const pf = t.closest('[data-pf]'); if (pf) { const k = pf.dataset.pf, v = pf.dataset.v, campo = PERFIL_CAMPOS.find(x => x.k === k); if (campo.multi) { const l = D.perfil[k] || []; D.perfil[k] = l.includes(v) ? l.filter(x => x !== v) : l.concat(v); } else D.perfil[k] = D.perfil[k] === v ? undefined : v; save(); ui.datos = true; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
+  const pf = t.closest('[data-pf]'); if (pf) { const k = pf.dataset.pf, v = pf.dataset.v, campo = PERFIL_CAMPOS.find(x => x.k === k); if (campo.multi) { const l = D.perfil[k] || []; D.perfil[k] = l.includes(v) ? l.filter(x => x !== v) : l.concat(v); } else D.perfil[k] = D.perfil[k] === v ? undefined : v; marcaFecha(k); save(); ui.datos = true; const y = window.scrollY; render(); window.scrollTo(0, y); return; }
   const a = t.closest('[data-act]'); if (!a) return;
   const act = a.dataset.act;
   if (act === 'nueva') return openPrenda();
@@ -337,6 +344,18 @@ $('app').addEventListener('click', e => {
   if (act === 'puesto') { marcarPuesto(ui.look); return toast('Apuntado. ¡A por el día!'); }
   if (act === 'guardarlook') return openConjunto(ui.look);
   if (act === 'exportar') return exportar();
+  if (act === 'pegar') {
+    const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
+    if (!o) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO1 hasta la última llave.');
+    let n = 0;
+    for (const c of PERFIL_CAMPOS) {
+      if (!(c.k in o)) continue; const v = o[c.k];
+      const ok = c.op ? (c.multi ? Array.isArray(v) && v.every(x => c.op.includes(x)) : c.op.includes(v)) : (c.tipo === 'num' ? +v > 0 : typeof v === 'string');
+      if (ok) { D.perfil[c.k] = c.tipo === 'num' ? String(+v) : v; marcaFecha(c.k); n++; }
+    }
+    save(); ui.datos = true; render(); return toast(n ? `${n} ${n === 1 ? 'dato aplicado' : 'datos aplicados'}` : 'No había datos válidos en el bloque.');
+  }
+  if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
   if (act === 'syncya') { ui.syncOpen = true; return ES.sync(); }
   if (act === 'synccode') { try { navigator.clipboard.writeText(ES.code()); toast('Código copiado. Pégalo en Estilo en tu otro dispositivo.'); } catch (er) {} return; }
   if (act === 'syncoff') { if (!confirm('¿Desconectar la sincronización en este dispositivo? Tus datos se quedan aquí.')) return; ES.off(); ui.syncOpen = true; return render(); }
@@ -352,7 +371,7 @@ $('app').addEventListener('click', e => {
   if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este móvil?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
 });
 $('app').addEventListener('change', e => {
-  const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; save(); return; }
+  const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; marcaFecha(i.dataset.pfin); save(); if (CAMBIANTES.includes(i.dataset.pfin)) { const y = window.scrollY; ui.datos = true; render(); window.scrollTo(0, y); } return; }
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
 });
 
