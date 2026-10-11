@@ -90,6 +90,9 @@ details.blq li { margin: 6px 0; }
 .acts { display: flex; gap: 8px; align-items: center; margin-top: 18px; position: sticky; bottom: 0; background: var(--card); padding-top: 8px; }
 .foto { display: grid; place-items: center; min-height: 140px; border: 2px dashed var(--line); border-radius: 16px; color: var(--muted); overflow: hidden; cursor: pointer; }
 .foto img { width: 100%; max-height: 300px; object-fit: contain; }
+.foto { position: relative; }
+.iatag { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); background: var(--ink); color: var(--bg); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+@media (prefers-reduced-motion: no-preference) { .foto.ia img { animation: lat 1.2s ease-in-out infinite alternate; } @keyframes lat { to { opacity: .55; } } }
 
 .toast { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; z-index: 40; font-size: 15px; max-width: calc(100% - 32px); }
 

@@ -30,6 +30,60 @@ function comprimir(file) {
   });
 }
 
+// ---------- color automático (gratis, en el móvil) ----------
+function colorDominante(url) {
+  return new Promise(ok => {
+    const img = new Image();
+    img.onload = () => {
+      const n = 48, c = document.createElement('canvas'); c.width = n; c.height = n;
+      const g = c.getContext('2d'), w = img.width, h = img.height;
+      g.drawImage(img, w * .3, h * .3, w * .4, h * .4, 0, 0, n, n); // solo el centro: ahí suele estar la prenda
+      const px = g.getImageData(0, 0, n, n).data, cuenta = {};
+      const ref = COLORES.filter(x => x !== 'Estampado').map(x => [x, HEX[x].match(/\w\w/g).map(v => parseInt(v, 16))]);
+      for (let i = 0; i < px.length; i += 4) {
+        let mejor = null, d = 1e9;
+        for (const [nom, q] of ref) { const e = (px[i] - q[0]) ** 2 * .3 + (px[i + 1] - q[1]) ** 2 * .59 + (px[i + 2] - q[2]) ** 2 * .11; if (e < d) { d = e; mejor = nom; } }
+        cuenta[mejor] = (cuenta[mejor] || 0) + 1;
+      }
+      const orden = Object.entries(cuenta).sort((a, b) => b[1] - a[1]);
+      // Si ningún color llega a un tercio del centro y el segundo pesa mucho, probablemente es estampado.
+      ok(orden[0][1] < n * n / 3 && orden[1] && orden[1][1] > n * n / 5 ? 'Estampado' : orden[0][0]);
+    };
+    img.onerror = () => ok('');
+    img.src = url;
+  });
+}
+
+// ---------- IA opcional: Claude analiza la foto con tu propia clave ----------
+const IA_KEY = 'estiloIA';
+const iaCfg = () => { try { return JSON.parse(localStorage.getItem(IA_KEY)) || {}; } catch (e) { return {}; } };
+const iaActiva = () => { const c = iaCfg(); return !!(c.on && c.key); };
+async function analizarIA(url) {
+  const { key } = iaCfg();
+  const schema = { type: 'object', additionalProperties: false, required: ['nombre', 'cat', 'color', 'temp', 'consejo'], properties: {
+    nombre: { type: 'string', description: 'Nombre corto de la prenda en español de España: tipo, color y material o detalle si se ve. Ej.: «Sobrecamisa de pana marrón».' },
+    cat: { type: 'string', enum: CATS }, color: { type: 'string', enum: COLORES }, temp: { type: 'string', enum: TEMPS },
+    consejo: { type: 'string', description: 'Una frase en español de España sobre con qué combinarla o cómo llevarla.' } } };
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: JSON.stringify({
+      model: 'claude-opus-5-5', max_tokens: 4000, fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: url.split(',')[1] } },
+        { type: 'text', text: 'Es una foto de una prenda de ropa de hombre para un armario digital. Describe la prenda principal (la más visible). Elige la categoría, el color principal y cuándo se lleva («Calor», «Frío» o «Todo el año») de las listas permitidas.' }
+      ] }]
+    })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'La clave no es válida.' : r.status === 429 ? 'Demasiadas peticiones seguidas. Espera un poco.' : /credit/i.test(JSON.stringify(j)) ? 'Tu cuenta de la API no tiene saldo.' : 'No se ha podido analizar (error ' + r.status + ').');
+  if (j.stop_reason === 'refusal') throw new Error('La IA no ha querido analizar esta foto.');
+  const t = (j.content || []).find(b => b.type === 'text');
+  if (!t) throw new Error('La IA no ha devuelto nada.');
+  return JSON.parse(t.text);
+}
+
 // ---------- utilidades de interfaz ----------
 function toast(t) { const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d); setTimeout(() => d.remove(), 2600); }
 function sheet(html) {
@@ -126,8 +180,19 @@ function vYo() {
       <details class="card blq"><summary>Productos para mí</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
       : '<div class="card tip"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos.</p></div>'}
     <details class="card blq" ${!cs.length || ui.datos ? 'open' : ''}><summary>Mis datos</summary>${PERFIL_CAMPOS.map(campo).join('')}</details>
+    ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub">Todo (también las fotos) se guarda solo en este móvil. Haz una copia de vez en cuando por si cambias de móvil o borras el navegador.</p>
       <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>`;
+}
+
+function iaHTML() {
+  const c = iaCfg();
+  return `<details class="card blq" ${ui.iaOpen ? 'open' : ''}><summary>Rellenar prendas con IA</summary>
+    <p class="sub" style="margin-top:10px">Sin IA, la app ya detecta el color sola. Con IA, al hacer la foto se rellenan también el tipo, un nombre, la temporada y un consejo para combinarla.</p>
+    <ul><li>Usa la API de Anthropic (Claude), que es de pago por uso y va aparte de la suscripción a Claude. La clave se crea en console.anthropic.com.</li><li>Tu clave se guarda solo en este móvil y no va en la copia de seguridad.</li><li>Cada foto se envía a Anthropic para analizarla.</li></ul>
+    ${c.key ? `<p class="mini">Clave guardada (acaba en ${esc(c.key.slice(-4))})</p><div class="row"><button class="pill ${c.on ? 'on' : ''}" data-act="iaon">${c.on ? 'IA activada' : 'IA desactivada'}</button><button class="pill" data-act="iaborrar">Borrar clave</button></div>`
+      : `<label class="campo"><span>Tu clave de la API</span><input id="iakey" type="password" autocomplete="off" placeholder="sk-ant-…"></label><div class="row"><button class="pill on" data-act="iaguardar">Guardar y activar</button></div>`}
+  </details>`;
 }
 
 const VISTAS = { hoy: vHoy, armario: vArmario, conjuntos: vConjuntos, compras: vCompras, yo: vYo };
@@ -152,7 +217,18 @@ function openPrenda(id) {
   paint();
   v.addEventListener('change', async e => {
     if (e.target.id !== 'pf' || !e.target.files[0]) return;
-    try { const n = v.querySelector('#pn').value; foto = await comprimir(e.target.files[0]); p.nombre = n; paint(); } catch (er) { toast('No se ha podido leer la foto.'); }
+    try { p.nombre = v.querySelector('#pn').value; p.notas = v.querySelector('#pno').value; foto = await comprimir(e.target.files[0]); } catch (er) { return toast('No se ha podido leer la foto.'); }
+    if (!color) { color = await colorDominante(foto); if (color) toast(`Color detectado: ${color.toLowerCase()}. Cámbialo si no es.`); }
+    paint();
+    if (!iaActiva()) return;
+    const st = v.querySelector('.foto'); st.classList.add('ia'); st.insertAdjacentHTML('beforeend', '<span class="iatag">Analizando con IA…</span>');
+    try {
+      const a = await analizarIA(foto);
+      if (!v.isConnected) return;
+      p.nombre = a.nombre || p.nombre; if (CATS.includes(a.cat)) cat = a.cat; if (COLORES.includes(a.color)) color = a.color; if (TEMPS.includes(a.temp)) temp = a.temp;
+      if (a.consejo && !p.notas) p.notas = a.consejo;
+      paint(); toast('Rellenado con IA. Revisa y guarda.');
+    } catch (er) { if (v.isConnected) { paint(); toast(er.message || 'No se ha podido analizar.'); } }
   });
   v.addEventListener('click', async e => {
     const keep = () => { p.nombre = v.querySelector('#pn').value; p.notas = v.querySelector('#pno').value; };
@@ -237,6 +313,9 @@ $('app').addEventListener('click', e => {
   if (act === 'puesto') { marcarPuesto(ui.look); return toast('Apuntado. ¡A por el día!'); }
   if (act === 'guardarlook') return openConjunto(ui.look);
   if (act === 'exportar') return exportar();
+  if (act === 'iaguardar') { const k = $('iakey').value.trim(); if (!/^sk-ant-/.test(k)) return toast('Eso no parece una clave de la API (empieza por sk-ant-).'); localStorage.setItem(IA_KEY, JSON.stringify({ key: k, on: true })); ui.iaOpen = true; render(); return toast('IA activada'); }
+  if (act === 'iaon') { const c = iaCfg(); c.on = !c.on; localStorage.setItem(IA_KEY, JSON.stringify(c)); ui.iaOpen = true; return render(); }
+  if (act === 'iaborrar') { if (!confirm('¿Borrar tu clave de este móvil?')) return; localStorage.removeItem(IA_KEY); ui.iaOpen = true; return render(); }
 });
 $('app').addEventListener('change', e => {
   const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; save(); return; }
