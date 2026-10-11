@@ -142,7 +142,7 @@ function sheet(html) {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const v = [...document.querySelectorAll('.veil')].pop(); if (v) v.close(); } });
 const swatch = c => `<span class="sw" style="background:${HEX[c] || '#ccc'}"></span>`;
-const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto" style="background:${HEX[p.color] || '#ccc'}"><b>${esc((p.cat || '?')[0])}</b></span>`;
+const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color)}</span>`;
 const prenda = id => D.prendas.find(p => p.id === id);
 // Nombre automático con concordancia: «camiseta blanca», «zapatillas negras», «vaqueros azul marino».
 const SING = { Camisetas: ['Camiseta', 'f'], Camisas: ['Camisa', 'f'], Polos: ['Polo', 'm'], 'Sudaderas y jerséis': ['Jersey', 'm'], 'Chaquetas y abrigos': ['Chaqueta', 'f'], Vaqueros: ['Vaqueros', 'mp'], Pantalones: ['Pantalón', 'm'], 'Pantalón corto': ['Pantalón corto', 'm'], Zapatillas: ['Zapatillas', 'fp'], Zapatos: ['Zapatos', 'mp'], Accesorios: ['Accesorio', 'm'], Deporte: ['Ropa de deporte', 'f'], Casa: ['Ropa de casa', 'f'] };
@@ -253,6 +253,7 @@ function vArmario() {
   const olvidadas = D.prendas.filter(p => { const u = ultimo(p); return (u ? dias(u) : dias((p.fecha || '').slice(0, 10) || hoyKey())) >= 60; }).length;
   return `${heroHTML('Mi armario', n ? `${n} ${n === 1 ? 'prenda' : 'prendas'}` : 'Empieza por lo que más te pones')}
     <button class="btn full" data-act="nueva">＋ Añadir prenda</button>
+    <label class="pill multi">📷 Subir varias fotos de golpe<input type="file" accept="image/*" multiple id="multi" hidden></label>
     ${n ? `<div class="stats"><div><b>${n}</b><small>prendas</small></div><div><b>${valor ? eur(valor) : '—'}</b><small>valor</small></div><div><b>${cpu ? eur(cpu) : '—'}</b><small>coste por puesta</small></div><button data-filtro="olvidadas" class="${ui.filtro === 'olvidadas' ? 'on' : ''}"><b>${olvidadas}</b><small>sin ponerte 2 meses</small></button></div>
       <input type="search" class="buscar" id="buscar" placeholder="Buscar: camisa, azul, Uniqlo…" value="${esc(ui.q)}" autocomplete="off">
       <div class="chips scroll"><button class="pill sm ${!ui.cat ? 'on' : ''}" data-cat="">Todo</button>${cats.map(c => `<button class="pill sm ${ui.cat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)} <span class="cnt">${D.prendas.filter(p => p.cat === c).length}</span></button>`).join('')}</div>
@@ -336,9 +337,9 @@ function vYo() {
   const campo = c => c.op ? `<div class="campo"><span>${esc(c.t)}${cuando(c.k)}</span>${c.ayuda ? `<small>${esc(c.ayuda)}</small>` : ''}<div class="chips">${c.op.map(o => { const on = c.multi ? (p[c.k] || []).includes(o) : p[c.k] === o; return `<button class="pill sm ${on ? 'on' : ''}" data-pf="${c.k}" data-v="${esc(o)}">${esc(o)}</button>`; }).join('')}</div></div>`
     : `<label class="campo"><span>${esc(c.t)}${cuando(c.k)}</span><input data-pfin="${c.k}" type="${c.tipo === 'num' ? 'number' : 'text'}" inputmode="${c.tipo === 'num' ? 'numeric' : 'text'}" value="${esc(p[c.k] || '')}" ${c.u ? `placeholder="${c.u}"` : ''} autocomplete="off"></label>`;
   const viejos = CAMBIANTES.filter(k => p[k] && p._f && p._f[k] && Date.now() - Date.parse(p._f[k]) > 90 * 864e5);
-  const pegar = `<textarea id="pegar" rows="3" placeholder="ESTILO1 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div>`;
+  const pegar = `<textarea id="pegar" rows="3" placeholder="ESTILO1 {…} o ESTILO2 {…}"></textarea><div class="row"><button class="pill on" data-act="pegar">Aplicar</button></div>`;
   return `${heroHTML('Para mí', `${relleno} de ${PERFIL_CAMPOS.length} datos · todo se adapta a ti`)}
-    ${relleno < 6 ? `<section class="card aviso"><h2>Pegar datos de Claude</h2><p class="sub">Si Claude te ha dado un bloque que empieza por ESTILO1, pégalo aquí y se rellenan tus datos de golpe.</p>${pegar}</section>` : ''}
+    ${relleno < 6 ? `<section class="card aviso"><h2>Pegar datos de Claude</h2><p class="sub">Si Claude te ha dado un bloque (ESTILO1 para tus datos, ESTILO2 para tu ropa), pégalo aquí.</p>${pegar}</section>` : ''}
     ${viejos.length ? `<section class="card aviso"><h2>¿Sigue todo igual?</h2><p class="sub">Hace más de tres meses que pusiste: ${viejos.map(k => PERFIL_CAMPOS.find(c => c.k === k).t.toLowerCase()).join(', ')}. Si ha cambiado, actualízalo y los consejos se ajustan.</p><button class="pill" data-act="sigueigual">Sigue igual</button></section>` : ''}
     ${pal ? `<section class="card"><h2>Tu paleta</h2><p class="mini">Te favorecen</p><div class="paleta">${pal.si.map(c => `<span><i style="background:${HEX[c]}"></i>${c}</span>`).join('')}</div>${pal.no.length ? `<p class="mini">Mejor lejos de la cara</p><div class="paleta no">${pal.no.map(c => `<span><i style="background:${HEX[c]}"></i>${c}</span>`).join('')}</div>` : ''}</section>` : ''}
     ${cs.length ? `<p class="sec">Tus consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
@@ -642,6 +643,18 @@ const clickApp = e => {
   if (act === 'lavado') { const l = D.prendas.filter(p => p.estado === 'Para lavar'); l.forEach(p => { p.estado = undefined; }); save(); ui.looks = []; render(); return toast(`${l.length} ${l.length === 1 ? 'prenda lista' : 'prendas listas'} para ponerse.`); }
   if (act === 'exportar') return exportar();
   if (act === 'sigueigual') { D.perfil._f = Object.assign({}, D.perfil._f); CAMBIANTES.forEach(k => { if (D.perfil[k]) D.perfil._f[k] = new Date().toISOString(); }); save(); return render(); }
+  if (act === 'pegar' && /ESTILO2/.test($('pegar').value)) {
+    const m = $('pegar').value.match(/ESTILO2\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
+    if (!o || !Array.isArray(o.prendas)) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO2 hasta la última llave.');
+    let n = 0, dup = 0, mal = 0;
+    for (const x of o.prendas) {
+      if (!x || !CATS.includes(x.cat) || (x.color && !COLORES.includes(x.color))) { mal++; continue; }
+      const nom = String(x.nombre || '').slice(0, 60);
+      if (D.prendas.some(p => p.cat === x.cat && p.color === (x.color || '') && (p.nombre || '') === nom)) { dup++; continue; }
+      D.prendas.push({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: String(x.talla || '').slice(0, 12), tienda: String(x.tienda || '').slice(0, 30), precio: '', notas: String(x.notas || '').slice(0, 120), fecha: new Date().toISOString(), usos0: 0 }); n++;
+    }
+    save(); ui.looks = []; render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} ya estaban` : ''}${mal ? ` · ${mal} no válidas` : ''}.`);
+  }
   if (act === 'pegar') {
     const m = $('pegar').value.match(/ESTILO1\s*(\{[\s\S]*\})/); let o = null; try { o = m && JSON.parse(m[1]); } catch (er) {}
     if (!o) return toast('No lo reconozco. Copia el bloque entero, desde ESTILO1 hasta la última llave.');
@@ -671,8 +684,47 @@ $('app').addEventListener('click', clickApp);
 $('app').addEventListener('change', e => {
   const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; marcaFecha(i.dataset.pfin); save(); if (CAMBIANTES.includes(i.dataset.pfin)) { const y = window.scrollY; ui.datos = true; render(); window.scrollTo(0, y); } return; }
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
+  if (e.target.id === 'multi' && e.target.files.length) { const fs = [...e.target.files]; e.target.value = ''; subirVarias(fs); }
 });
 $('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; }, true);
+
+// ---------- varias fotos de golpe ----------
+async function subirVarias(files) {
+  const cola = []; toast(`Preparando ${files.length} ${files.length === 1 ? 'foto' : 'fotos'}…`);
+  for (const f of files.slice(0, 40)) { try { const foto = await comprimir(f); cola.push({ foto, color: await colorDominante(foto) }); } catch (e) {} }
+  if (!cola.length) return toast('No he podido leer las fotos.');
+  if (iaActiva()) {
+    for (let i = 0; i < cola.length; i++) { try { const a = await analizarIA(cola[i].foto); Object.assign(cola[i], { nombre: a.nombre, cat: CATS.includes(a.cat) ? a.cat : '', color: COLORES.includes(a.color) ? a.color : cola[i].color, temp: TEMPS.includes(a.temp) ? a.temp : 'Todo el año', notas: a.consejo }); } catch (e) { toast(e.message); break; } }
+  }
+  clasificar(cola);
+}
+function clasificar(cola) {
+  let i = 0, n = 0; const v = sheet('');
+  const sig = () => { i++; paint(); };
+  const guardar = async x => {
+    const o = { id: uid('p'), nombre: x.nombre || '', cat: x.cat, color: x.color || '', temp: x.temp || 'Todo el año', notas: x.notas || '', talla: '', precio: '', tienda: '', fecha: new Date().toISOString(), usos0: 0 };
+    try { await fotoPut(o.id, x.foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (e) {}
+    D.prendas.push(o); n++;
+  };
+  const paint = () => {
+    if (i >= cola.length) { save(); ui.looks = []; v.close(); render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'} al armario.`); }
+    const x = cola[i];
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><p class="eyebrow">Foto ${i + 1} de ${cola.length}</p><h2>¿Qué prenda es?</h2>
+      <div class="ficha-foto"><img src="${x.foto}" alt=""></div>
+      ${x.nombre ? `<p class="nota n2" style="text-align:center">La IA dice: ${esc(x.nombre)}</p>` : ''}
+      <p class="mini">Tipo</p><div class="chips tight">${CATS.map(c => `<button class="pill sm ${x.cat === c ? 'on' : ''}" data-cls="${c}">${c}</button>`).join('')}</div>
+      <p class="mini">Color ${x.color ? `<span class="muted">(detectado)</span>` : ''}</p><div class="chips tight">${COLORES.map(c => `<button class="pill sm ${x.color === c ? 'on' : ''}" data-clscol="${c}">${swatch(c)}${c}</button>`).join('')}</div>
+      <div class="acts"><button class="btn ghost" data-clsskip>Saltar esta</button><span class="sp"></span><button class="btn" data-clsok>${i + 1 === cola.length ? 'Terminar' : 'Siguiente'}</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', async e => {
+    const x = cola[i]; if (!x) return;
+    const c = e.target.closest('[data-cls]'); if (c) { x.cat = c.dataset.cls; return paint(); }
+    const k = e.target.closest('[data-clscol]'); if (k) { x.color = k.dataset.clscol; return paint(); }
+    if (e.target.closest('[data-clsskip]')) return sig();
+    if (e.target.closest('[data-clsok]')) { if (!x.cat) return toast('Elige el tipo de prenda o pulsa «Saltar esta».'); await guardar(x); sig(); }
+  });
+}
 
 // ---------- copia de seguridad ----------
 function exportar() {

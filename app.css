@@ -81,7 +81,11 @@ input:focus, textarea:focus { outline: none; border-color: var(--denim); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(98px, 1fr)); gap: 9px; }
 .prenda { position: relative; border: 0; padding: 0; background: var(--card); border-radius: 16px; overflow: hidden; text-align: left; box-shadow: var(--sh); display: flex; flex-direction: column; transition: transform .12s; }
 .prenda img, .prenda .nofoto, .lk img, .lk .nofoto, .ficha-foto img, .ficha-foto .nofoto { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: grid; place-items: center; }
-.nofoto b { color: rgba(255, 255, 255, .9); font: 800 30px var(--display); text-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+.nofoto { background: linear-gradient(160deg, var(--bg), var(--line)); }
+.nofoto .sil { width: 78%; height: auto; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .12)); }
+.mini-look .nofoto .sil { width: 90%; }
+.pz .lk .nofoto .sil { width: 82%; }
+.multi { margin: -4px 0 14px; cursor: pointer; }
 .pn { padding: 8px 9px 10px; display: block; }
 .pn b { display: block; font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pn small { color: var(--muted); font-size: 12px; display: flex; align-items: center; }
