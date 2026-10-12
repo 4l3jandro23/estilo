@@ -287,3 +287,10 @@ details.blq li { margin: 8px 0; }
 .carac dl div { display: grid; grid-template-columns: 112px 1fr; gap: 10px; font-size: 14px; line-height: 1.35; }
 .carac dt { color: var(--muted); font-weight: 600; }
 .carac dd { margin: 0; }
+
+.pant .lrow-b { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); padding: 9px 0; }
+.pant .lrow-b b { display: block; font-size: 15px; font-weight: 650; }
+.pant .lrow-b small { display: block; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.pantres { display: block; width: 100%; text-align: left; border: 1.5px dashed var(--hilo); }
+.pantres b { display: block; font-family: var(--display); font-size: 17px; }
+.pantres small { color: var(--muted); font-size: 13px; }

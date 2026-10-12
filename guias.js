@@ -173,5 +173,7 @@ const CARACT = [
   ['ajuste', 'Cómo te queda', 'Bien, justo, no cierra, holgado…', 140, false],
   ['sensacion', 'Cómo se siente', 'Cómodo, aprieta, da calor…', 120, false],
   ['arreglo', 'Qué arreglar', 'Acortar el bajo, estrechar la pierna…', 160, false],
+  ['composicion', 'Composición', 'Algodón 98 %, elastano 2 %…', 80, false],
+  ['lavado', 'Cómo se lava', '30 °, del revés, no secadora…', 80, false],
   ['cuidado', 'Cuidado', 'Planchar, quitar manchas, ropa interior clara…', 140, false]
 ];
