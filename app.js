@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 16;
+const VERSION = 17;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -228,7 +228,7 @@ function sheet(html) {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const v = [...document.querySelectorAll('.veil')].pop(); if (v) v.close(); } });
 const swatch = c => `<span class="sw" style="background:${HEX[c] || '#ccc'}"></span>`;
-const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color, p.corte)}</span>`;
+const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color, p.corte, p)}</span>`;
 const prenda = id => D.prendas.find(p => p.id === id);
 // Nombre automático con concordancia: «camiseta blanca», «zapatillas negras», «vaqueros azul marino».
 const SING = { Camisetas: ['Camiseta', 'f'], Camisas: ['Camisa', 'f'], Polos: ['Polo', 'm'], 'Sudaderas y jerséis': ['Jersey', 'm'], 'Chaquetas y abrigos': ['Chaqueta', 'f'], Vaqueros: ['Vaqueros', 'mp'], Pantalones: ['Pantalón', 'm'], 'Pantalón corto': ['Pantalón corto', 'm'], Zapatillas: ['Zapatillas', 'fp'], Zapatos: ['Zapatos', 'mp'], Accesorios: ['Accesorio', 'm'], Deporte: ['Ropa de deporte', 'f'], Casa: ['Ropa de casa', 'f'] };
@@ -350,10 +350,25 @@ function vArmario() {
       <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['revision', '🔍 Revisión'], ['fav', '♥ Favoritas'], ['lavar', '🧺 Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
       ${pantalonesHTML()}
       ${ui.filtro === 'revision' ? resumenRevision() : ''}
-      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? '<i class="fav">♥</i>' : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${p.estado === 'Para lavar' ? '🧺' : p.estado === 'Para arreglar' ? '🪡' : '📦'}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
+      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? '<i class="fav">♥</i>' : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${p.estado === 'Para lavar' ? '🧺' : p.estado === 'Para arreglar' ? '🪡' : '📦'}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${esPant(p) && (p.tienda || p.corte) ? esc([p.tienda, p.corte].filter(Boolean).join(' · ')) : usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
     : `<div class="vacio grande"><div class="percha" aria-hidden="true"></div><p><b>Tu armario está vacío.</b></p><p>Haz una foto a cada prenda, colgada en una percha o extendida en la cama, con luz de día. La app detecta el color sola.</p><p class="mini-t">Empieza por lo que más te pones: con 8–10 prendas ya te propongo conjuntos.</p></div>`}`;
 }
 
+function openFotosPant() {
+  const v = sheet('');
+  const paint = () => {
+    const l = D.prendas.filter(esPant).sort((x, y) => (FOTOS[x.id] ? 1 : 0) - (FOTOS[y.id] ? 1 : 0));
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Fotos de tus pantalones</h2><p class="sub">Haz una foto a cada pantalón solo, sobre la cama o colgado, y así los reconoces de un vistazo. Toca «Foto» en cada uno.</p>
+      ${l.map(p => `<div class="lrow fp"><span class="fpt">${thumb(p)}</span><span class="b"><b>${esc(nombre(p))}</b><small>${esc([p.tienda, p.corte, p.largo].filter(Boolean).join(' · '))}</small></span><label class="pill sm ${FOTOS[p.id] ? '' : 'on'}">${FOTOS[p.id] ? 'Cambiar' : '📷 Foto'}<input type="file" accept="image/*" data-fpid="${p.id}" hidden></label></div>`).join('')}
+      <div class="acts"><span class="sp"></span><button class="btn" data-close>Listo</button></div>`;
+  };
+  paint();
+  v.addEventListener('change', async e => {
+    const i = e.target.closest('[data-fpid]'); if (!i || !i.files[0]) return;
+    const p = prenda(i.dataset.fpid); if (!p) return;
+    try { const url = await comprimir(i.files[0]); await fotoPut(p.id, url); p.fv = Date.now(); ES.fotoLocal(p.id, p.fv); save(); paint(); render(); toast('Foto guardada'); } catch (er) { toast('No se ha podido guardar la foto.'); }
+  });
+}
 function añadirReco(x) {
   if (D.compras.some(c => !c.hecho && c.que === x.que)) return toast('Ya está en tu lista.');
   D.compras.push({ id: uid('b'), que: x.que, cat: x.cat, prio: x.prio, precio: '', donde: x.donde, link: '', por: x.por, claude: true, hecho: false, fecha: new Date().toISOString() });
@@ -366,6 +381,7 @@ function pantalonesHTML() {
   return `<section class="card pant"><div class="row-h"><h2>👖 Tus pantalones</h2><small class="muted">${r.total} en total</small></div>
     <div class="chips scroll">${GRUPOS_PANT.map(([k, t, i]) => s[k].length ? `<button class="pill sm ${ui.vf === k ? 'on' : ''}" data-vf="${k}">${i} ${t} <span class="cnt">${s[k].length}</span></button>` : '').join('')}${s.sin.length ? `<button class="pill sm ${ui.vf === 'sin' ? 'on' : ''}" data-vf="sin">Sin revisar <span class="cnt">${s.sin.length}</span></button>` : ''}</div>
     ${ui.vf ? '<p class="mini-t">Mostrando solo ese grupo. Toca otra vez el botón para ver todo.</p>' : ''}
+    <div class="row"><button class="pill ${D.prendas.some(p => esPant(p) && !FOTOS[p.id]) ? 'on' : ''}" data-act="fotospant">📷 Fotos de tus pantalones${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length ? ` (faltan ${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length})` : ''}</button></div>
     ${s.arreglar.length ? `<p class="mini">🪡 Para arreglar</p>${lista(s.arreglar, 'arreglo')}` : ''}
     ${s.vender.length ? `<p class="mini">💰 Para vender o regalar</p>${lista(s.vender, 'ajuste')}` : ''}
     ${rc.compra.length ? `<p class="mini">⭐ Te recomiendo comprar</p>${rc.compra.map((x, i) => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row">${x.enLista ? '<span class="tag bien">Ya en tu lista</span>' : `<button class="pill sm on" data-reco="${i}">Añadir a mi lista</button>`}</div></div>`).join('')}` : ''}
@@ -818,6 +834,7 @@ const clickApp = e => {
   if (act === 'nuevoconj') return openConjunto();
   if (act === 'nuevacomp') return openCompra();
   if (act === 'locompro') return openLoCompro();
+  if (act === 'fotospant') return openFotosPant();
   if (act === 'rutinaedit') return openRutina();
   if (act === 'otro') { if (!ui.looks.length) return; ui.lookI = (ui.lookI + 1) % ui.looks.length; return render(); }
   if (act === 'puesto') { const l = ui.looks[ui.lookI]; if (l) { ponerHoy(l.ids, ui.ocasion); ui.lock = []; } return; }

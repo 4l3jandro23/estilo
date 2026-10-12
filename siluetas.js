@@ -19,7 +19,8 @@ const SIL = {
 };
 let _sid = 0;
 const PANT_CORTE = { Ancho: 'M27 10 H73 L84 112 H57 L50 46 L43 112 H16 Z', Ajustado: 'M32 10 H68 L65 112 H53 L50 44 L47 112 H35 Z' };
-function prendaSVG(cat, color, corte) {
+const esc2 = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function prendaSVG(cat, color, corte, p) {
   let defs = SIL[cat] || SIL.Camisetas;
   if ((cat === 'Pantalones' || cat === 'Vaqueros') && corte) {
     defs = defs.slice(); if (PANT_CORTE[corte]) defs[0] = PANT_CORTE[corte];
@@ -28,6 +29,22 @@ function prendaSVG(cat, color, corte) {
   const fill = (HEX[color] || '#9AA3B2'), est = color === 'Estampado', id = 'ps' + (++_sid);
   const oscuro = ['Negro', 'Azul marino', 'Burdeos', 'Marrón', 'Verde oliva'].includes(color), linea = oscuro ? 'rgba(255,255,255,.35)' : 'rgba(0,0,0,.28)';
   let f = est ? `url(#${id})` : fill.startsWith('linear') ? '#C73A33' : fill, body = '', det = '';
+  let etiqueta = '';
+  if (p && ['Pantalones', 'Vaqueros', 'Pantalón corto'].includes(cat)) {
+    // Con lo que sabemos de la prenda: cintura, bolsillos, bajo, rayas, detalles y tienda, para distinguir unos de otros.
+    const t = [p.cintura, p.bolsillos, p.tejido, p.bajo, p.largo, p.corte].join(' ').toLowerCase(), corto = cat === 'Pantalón corto';
+    defs = defs.slice();
+    if (corto) { const y = /medio muslo/.test(t) ? 66 : 80; defs[0] = `M30 24 H70 L77 ${y} H54 L50 ${y - 22} L46 ${y} H23 Z`; }
+    if (/goma|cord[oó]n/.test(t)) defs.push('M30 20 H70', 'M50 20 Q46 30 43 34', 'M50 20 Q54 30 57 34');
+    else if (/bot[oó]n|bragueta/.test(t) && !corto) defs.push('#b:50:17:2.2');
+    if (/pinzas/.test(t) && !corto) defs.push('M40 22 V38', 'M60 22 V38');
+    if (/cargo/.test(t) && corte !== 'Cargo' && !corto) defs.push('#r:20:58:14:16:2', '#r:66:58:14:16:2');
+    if (/vuelta|pu[nñ]o/.test(t) && !corto) defs.push('M27 100 H47', 'M53 100 H73');
+    if (/rayas/.test(t)) defs.push(...(corto ? ['M40 28 V72', 'M60 28 V72'] : ['M38 26 V108', 'M62 26 V108']));
+    if (/parche|bordado|elefante/.test(t)) defs.push('#b:62:40:3.4');
+    const tienda = (p.tienda || '').split(/[ (]/)[0].slice(0, 9);
+    if (tienda) etiqueta = `<text x="50" y="${corto ? 52 : 80}" text-anchor="middle" font-size="${corto ? 11 : 9.5}" font-weight="800" fill="${oscuro ? '#fff' : '#161C27'}" stroke="${oscuro ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.6)'}" stroke-width=".7" paint-order="stroke">${esc2(tienda)}</text>`;
+  }
   defs.forEach((d, i) => {
     if (d.startsWith('#b:')) { const [, x, y, r] = d.split(':'); det += `<circle cx="${x}" cy="${y}" r="${r}" fill="${linea}"/>`; }
     else if (d.startsWith('#r:')) { const [, x, y, w, h, r] = d.split(':'); body += i === 0 ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${f}" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>` : `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="none" stroke="${linea}" stroke-width="2.5"/>`; }
@@ -35,5 +52,5 @@ function prendaSVG(cat, color, corte) {
     else det += `<path d="${d}" fill="none" stroke="${linea}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   });
   const pat = est ? `<defs><pattern id="${id}" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><rect width="14" height="14" fill="#DCE3EE"/><rect width="6" height="14" fill="#6F8DBE"/></pattern></defs>` : '';
-  return `<svg class="sil" viewBox="0 0 100 120" aria-hidden="true">${pat}${body}${det}</svg>`;
+  return `<svg class="sil" viewBox="${cat === 'Pantalón corto' ? '10 12 80 76' : '0 0 100 120'}" aria-hidden="true">${pat}${body}${det}${etiqueta}</svg>`;
 }
