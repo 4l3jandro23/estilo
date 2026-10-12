@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 13;
+const VERSION = 14;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -96,6 +96,52 @@ async function analizarIA(url) {
   const t = (j.content || []).find(b => b.type === 'text');
   if (!t) throw new Error('La IA no ha devuelto nada.');
   return JSON.parse(t.text);
+}
+async function llamarIA(content, schema, effort) {
+  const { key } = iaCfg();
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true', 'anthropic-beta': 'server-side-fallback-2026-07-01' },
+    body: JSON.stringify({ model: 'claude-opus-5-5', max_tokens: 8000, fallbacks: 'default', output_config: { effort, format: { type: 'json_schema', schema } }, messages: [{ role: 'user', content }] })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'La clave no es válida.' : r.status === 429 ? 'Demasiadas peticiones seguidas. Espera un poco.' : /credit/i.test(JSON.stringify(j)) ? 'Tu cuenta de la API no tiene saldo.' : 'No se ha podido analizar (error ' + r.status + ').');
+  if (j.stop_reason === 'refusal') throw new Error('La IA no ha querido analizar esta foto.');
+  const t = (j.content || []).find(b => b.type === 'text');
+  if (!t) throw new Error('La IA no ha devuelto nada.');
+  return JSON.parse(t.text);
+}
+
+/* «¿Lo compro?» con foto: la prenda de la tienda o de internet + tu perfil + tu armario → veredicto. */
+const VER_COMPRA = ['Sí, cómpralo', 'Puede valer', 'Mejor no'];
+async function analizarCompra(url, precio, nota) {
+  const schema = { type: 'object', additionalProperties: false, required: ['veredicto', 'que', 'cat', 'color', 'resumen', 'aFavor', 'enContra', 'combinaCon', 'conjuntos', 'precio', 'talla', 'alternativa'], properties: {
+    veredicto: { type: 'string', enum: VER_COMPRA },
+    que: { type: 'string', description: 'Nombre corto de la prenda: tipo, color y detalle. Ej.: «Chino recto azul marino».' },
+    cat: { type: 'string', enum: CATS }, color: { type: 'string', enum: COLORES },
+    resumen: { type: 'string', description: 'Una o dos frases directas con el porqué del veredicto.' },
+    aFavor: { type: 'array', items: { type: 'string' }, description: 'Puntos a favor (color, corte, lo que aporta a su armario…).' },
+    enContra: { type: 'array', items: { type: 'string' }, description: 'Puntos en contra o dudas. Vacío si no hay.' },
+    combinaCon: { type: 'array', items: { type: 'string' }, description: 'Nombres EXACTOS de prendas de su armario con las que combina, copiados de la lista.' },
+    conjuntos: { type: 'array', items: { type: 'string' }, description: 'Hasta 3 conjuntos concretos con prendas suyas.' },
+    precio: { type: 'string', description: 'Opinión sobre el precio si se conoce o se ve en la foto; si no, cadena vacía.' },
+    talla: { type: 'string', description: 'Qué mirar al probárselo (talla, largo, ajuste) según su cuerpo.' },
+    alternativa: { type: 'string', description: 'Si es «Mejor no» o «Puede valer», qué buscar en su lugar; si no, cadena vacía.' } } };
+  const perfil = PERFIL_CAMPOS.filter(c => D.perfil[c.k] != null && D.perfil[c.k] !== '').map(c => `${c.t}: ${[].concat(D.perfil[c.k]).join(', ')}`).join('; ');
+  const pal = paleta(D.perfil);
+  const armario = D.prendas.map(p => `- ${p.nombre || catSing(p.cat)} (${p.cat}${p.color ? ', ' + p.color : ''}${p.corte ? ', ' + p.corte : ''}${p.veredicto && p.veredicto !== 'Quédatela' ? ', ' + p.veredicto : ''})`).join('\n');
+  const lista = D.compras.filter(c => !c.hecho).map(c => '- ' + c.que).join('\n');
+  const texto = `Soy un hombre y quiero saber si me compro la prenda de la foto (es de una tienda o de internet). Responde en español de España, con sinceridad y tono amable, sin hablar de peso ni de dietas.
+Mi perfil: ${perfil || 'sin rellenar'}.
+${pal ? `Colores que me favorecen: ${pal.si.join(', ')}. Colores que me favorecen menos cerca de la cara: ${pal.no.join(', ') || 'ninguno'}.` : ''}
+Mi armario ahora mismo:
+${armario || '(vacío)'}
+Lo que ya tengo apuntado para comprar:
+${lista || '(nada)'}
+${precio ? `Precio: ${precio} €.` : 'No sé el precio (míralo en la foto si aparece).'}${D.perfil.presupuesto ? ` Mi presupuesto al mes: ${D.perfil.presupuesto}.` : ''}
+${nota ? `Nota mía: ${nota}` : ''}
+Ten en cuenta si me favorece (color, corte, mi cuerpo y mi cara), si se parece a algo que ya tengo, con cuántas cosas mías combina y si cubre algo que me falta. Regla: si no salen 3 conjuntos con lo que ya tengo, mejor no.`;
+  return llamarIA([{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: url.split(',')[1] } }, { type: 'text', text: texto }], schema, 'medium');
 }
 
 // ---------- el tiempo en Barcelona (Open-Meteo, sin cuenta) ----------
@@ -569,7 +615,7 @@ function openCompra(pre) {
   const v = sheet('');
   const paint = () => {
     const g = (k, d) => v.querySelector(k) ? v.querySelector(k).value : d;
-    const que = g('#cq', pre && pre.n || ''), pr = g('#cp', ''), dn = g('#cd', ''), ln = g('#cl', '');
+    const que = g('#cq', pre && pre.n || ''), pr = g('#cp', pre && pre.precio || ''), dn = g('#cd', ''), ln = g('#cl', '');
     v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Añadir a la lista</h2>
       <label class="campo"><span>Qué</span><input id="cq" value="${esc(que)}" placeholder="Vaqueros azul oscuro rectos" autocomplete="off"></label>
       <div class="campo"><span>Tipo (para añadirlo al armario cuando lo compres)</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-ccat="${c}">${c}</button>`).join('')}</div></div>
@@ -585,13 +631,39 @@ function openCompra(pre) {
     if (!e.target.closest('[data-cmok]')) return;
     const que = v.querySelector('#cq').value.trim(); if (!que) return v.querySelector('#cq').focus();
     const link = v.querySelector('#cl').value.trim();
-    D.compras.push({ id: uid('b'), que, cat, prio, precio: v.querySelector('#cp').value, donde: v.querySelector('#cd').value.trim(), link: /^https?:\/\//.test(link) ? link : '', hecho: false, fecha: new Date().toISOString() }); save(); v.close(); render();
+    D.compras.push(Object.assign({ id: uid('b'), que, cat, prio, precio: v.querySelector('#cp').value, donde: v.querySelector('#cd').value.trim(), link: /^https?:\/\//.test(link) ? link : '', hecho: false, fecha: new Date().toISOString() }, pre && pre.por ? { por: pre.por, claude: true } : {})); save(); v.close(); render();
   });
 }
 
 function openLoCompro() {
-  let cat = '', color = '';
+  let cat = '', color = '', foto = '', ia = null, cargando = false, err = '';
   const v = sheet('');
+  const fotoHTML = () => {
+    const g = k => v.querySelector(k) ? v.querySelector(k).value : '';
+    const pr = g('#lc_precio'), nt = g('#lc_nota');
+    let r = '';
+    if (cargando) r = '<p class="mini-t">Mirando la prenda con tu perfil y tu armario… tarda unos segundos.</p>';
+    else if (err) r = `<p class="mini-t">⚠️ ${esc(err)}</p>`;
+    else if (ia) {
+      const cls = ia.veredicto === VER_COMPRA[0] ? 'bien' : ia.veredicto === VER_COMPRA[1] ? 'medio' : 'mal';
+      const mias = (ia.combinaCon || []).map(n => D.prendas.find(p => (p.nombre || '').toLowerCase() === String(n).toLowerCase())).filter(Boolean);
+      const li = l => (l || []).filter(Boolean).map(x => `<li>${esc(x)}</li>`).join('');
+      r = `<div class="veredicto ${cls}"><b>${esc(ia.veredicto)}</b></div><p><b>${esc(ia.que)}</b> · ${esc(ia.resumen)}</p>
+        ${(ia.aFavor || []).length ? `<p class="mini">A favor</p><ul>${li(ia.aFavor)}</ul>` : ''}
+        ${(ia.enContra || []).length ? `<p class="mini">En contra</p><ul>${li(ia.enContra)}</ul>` : ''}
+        ${mias.length ? `<p class="mini">Combina con lo tuyo (${mias.length})</p><div class="look xs">${mias.slice(0, 10).map(x => `<span class="lk">${thumb(x)}</span>`).join('')}</div>` : ''}
+        ${(ia.conjuntos || []).length ? `<p class="mini">Conjuntos</p><ul>${li(ia.conjuntos)}</ul>` : ''}
+        ${ia.precio ? `<p class="mini-t"><b>Precio:</b> ${esc(ia.precio)}</p>` : ''}${ia.talla ? `<p class="mini-t"><b>Al probártelo:</b> ${esc(ia.talla)}</p>` : ''}${ia.alternativa ? `<p class="mini-t"><b>Mejor busca:</b> ${esc(ia.alternativa)}</p>` : ''}
+        <div class="row"><button class="pill on" data-lciadd>Añadir a la lista</button><button class="pill" data-lcotra>Otra foto</button></div>`;
+    }
+    return `<section class="opinion"><p class="mini" style="margin-top:0">📷 Con una foto de la tienda o de internet</p>
+      ${foto ? `<img class="lcfoto" src="${foto}" alt="">` : ''}
+      ${!foto ? `<label class="btn full">Hacer foto o elegir captura<input type="file" accept="image/*" data-lcfile hidden></label>` : ''}
+      ${foto && !ia && !cargando ? `<div class="dos"><label class="campo"><span>Precio (€, si lo sabes)</span><input id="lc_precio" type="number" inputmode="decimal" value="${esc(pr)}" autocomplete="off"></label><label class="campo"><span>Nota (opcional)</span><input id="lc_nota" value="${esc(nt)}" placeholder="Para el trabajo, en rebajas…" autocomplete="off"></label></div>
+        <div class="row"><button class="pill on" data-lcia>${iaActiva() ? '¿Me lo recomiendas?' : 'Ver qué color es'}</button><button class="pill" data-lcotra>Quitar foto</button></div>
+        ${iaActiva() ? '' : '<p class="mini-t">Para que te diga si te lo recomiendo con la foto, activa la IA en Para mí → «Rellenar prendas con IA». Sin ella solo detecto el color y tú eliges el tipo abajo.</p>'}` : ''}
+      ${r}</section>`;
+  };
   const paint = () => {
     let res = '';
     if (cat && color) {
@@ -608,7 +680,9 @@ function openLoCompro() {
         ${comb.length ? `<div class="look xs">${comb.slice(0, 8).map(x => `<span class="lk">${thumb(x)}</span>`).join('')}</div>` : ''}
         <div class="row"><button class="pill on" data-lcadd>Añadir a la lista</button></div>`;
     }
-    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>¿Lo compro?</h2><p class="sub">Dime qué es y te digo si encaja con tu armario.</p>
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>¿Lo compro?</h2><p class="sub">Pásame una foto o dime qué es y te digo si encaja contigo y con tu armario.</p>
+      ${fotoHTML()}
+      <p class="mini">O a mano</p>
       <div class="campo"><span>Tipo</span><div class="chips tight">${CATS.map(c => `<button class="pill sm ${cat === c ? 'on' : ''}" data-lcat="${c}">${c}</button>`).join('')}</div></div>
       <div class="campo"><span>Color</span><div class="chips tight">${COLORES.map(c => `<button class="pill sm ${color === c ? 'on' : ''}" data-lcol="${c}">${swatch(c)}${c}</button>`).join('')}</div></div>
       ${res}
@@ -619,6 +693,19 @@ function openLoCompro() {
     const a = e.target.closest('[data-lcat]'); if (a) { cat = a.dataset.lcat; return paint(); }
     const b = e.target.closest('[data-lcol]'); if (b) { color = b.dataset.lcol; return paint(); }
     if (e.target.closest('[data-lcadd]')) { v.close(); openCompra({ n: `${catSing(cat)} ${adjColor(color, (SING[cat] || ['', 'm'])[1])}`, cat }); }
+    if (e.target.closest('[data-lcotra]')) { foto = ''; ia = null; err = ''; return paint(); }
+    if (e.target.closest('[data-lciadd]')) { const pr = precioIA; v.close(); return openCompra({ n: ia.que, cat: ia.cat, precio: pr, por: ia.resumen }); }
+    if (e.target.closest('[data-lcia]')) {
+      precioIA = v.querySelector('#lc_precio').value; const nota = v.querySelector('#lc_nota').value.trim();
+      if (!iaActiva()) { colorDominante(foto).then(c => { if (c) color = c; paint(); toast(c ? `Parece ${c.toLowerCase()}. Elige el tipo abajo.` : 'No he sabido ver el color.'); }); return; }
+      cargando = true; err = ''; paint();
+      analizarCompra(foto, precioIA, nota).then(x => { ia = x; if (CATS.includes(x.cat)) cat = x.cat; if (COLORES.includes(x.color)) color = x.color; }).catch(er => { err = er.message || 'No se ha podido analizar.'; }).finally(() => { cargando = false; paint(); });
+    }
+  });
+  let precioIA = '';
+  v.addEventListener('change', async e => {
+    if (!e.target.matches('[data-lcfile]')) return; const f = e.target.files[0]; if (!f) return;
+    try { foto = await comprimir(f); ia = null; err = ''; paint(); } catch (er) { toast('No he podido abrir esa foto.'); }
   });
 }
 
