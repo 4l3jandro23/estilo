@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 14;
+const VERSION = 15;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -489,6 +489,11 @@ function combinaCon(p) {
   const partes = Object.entries(PARTE).filter(([, cats]) => !cats.includes(p.cat)).flatMap(([, c]) => c);
   return D.prendas.filter(x => x.id !== p.id && partes.includes(x.cat) && combinan(p.color, x.color) === 2 && disponible(x)).sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || usos(b) - usos(a)).slice(0, 8);
 }
+const esAbajo = cat => PARTE.abajo.includes(cat);
+const caractHTML = p => {
+  const l = [['Corte', p.corte]].concat(CARACT.map(([k, t]) => [t, p[k]])).filter(([, v]) => v);
+  return l.length ? `<section class="carac"><p class="mini" style="margin-top:0">Características</p><dl>${l.map(([t, v]) => `<div><dt>${esc(t)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></section>` : '';
+};
 function openFicha(id) {
   const v = sheet('');
   const paint = () => {
@@ -500,6 +505,7 @@ function openFicha(id) {
       <div class="chips tight"><span class="tag">${esc(p.cat)}</span>${p.color ? `<span class="tag">${swatch(p.color)}${esc(p.color)}</span>` : ''}<span class="tag">${esc(p.temp || 'Todo el año')}</span>${p.talla ? `<span class="tag etiq">Talla ${esc(p.talla)}</span>` : ''}${p.tienda ? `<span class="tag">${esc(p.tienda)}</span>` : ''}</div>
       <div class="stats sm"><div><b>${u}</b><small>${u === 1 ? 'vez' : 'veces'}</small></div><div><b>${ul ? haceDias(ul) : '—'}</b><small>última vez</small></div><div><b>${+p.precio ? eur(+p.precio / Math.max(1, u)) : '—'}</b><small>por puesta</small></div></div>
       ${p.veredicto || p.consejo ? `<section class="opinion"><p class="mini" style="margin-top:0">Mi opinión</p>${p.veredicto ? `<p class="veredicto-t ${(VER[p.veredicto] || [])[1] || ''}">${(VER[p.veredicto] || [])[2] || ''} ${esc(p.veredicto)}</p>` : ''}${p.consejo ? `<p>${esc(p.consejo)}</p>` : ''}${p.ocasiones ? `<p class="mini-t"><b>Cuándo:</b> ${esc(p.ocasiones)}</p>` : ''}${p.combinar ? `<p class="mini-t"><b>Con qué:</b> ${esc(p.combinar)}</p>` : ''}</section>` : ''}
+      ${caractHTML(p)}
       ${p.notas ? `<p class="nota-p">${esc(p.notas)}</p>` : ''}
       <p class="mini">Qué hacer con ella</p><div class="chips tight">${VEREDICTOS.map(([v, c, i]) => `<button class="pill sm ${p.veredicto === v ? 'on' : ''}" data-fver="${esc(v)}">${i} ${esc(v)}</button>`).join('')}</div>
       <p class="mini">Estado</p><div class="chips tight">${['', 'Para lavar', 'Para arreglar', 'Para donar'].map(e => `<button class="pill sm ${(p.estado || '') === e ? 'on' : ''}" data-festado="${e}">${e || 'Lista para ponerse'}</button>`).join('')}</div>
@@ -525,7 +531,7 @@ function openPrenda(id, pre) {
   const p = id ? Object.assign({}, prenda(id)) : Object.assign({ cat: '', color: '', temp: 'Todo el año' }, pre || {});
   let foto = id ? FOTOS[id] : null, cat = p.cat, color = p.color, temp = p.temp || 'Todo el año';
   const v = sheet('');
-  const keep = () => { for (const k of ['nombre', 'notas', 'talla', 'precio', 'tienda']) { const i = v.querySelector('#p_' + k); if (i) p[k] = i.value; } };
+  const keep = () => { for (const k of ['nombre', 'notas', 'talla', 'precio', 'tienda'].concat(CARACT.map(c => c[0]))) { const i = v.querySelector('#p_' + k); if (i) p[k] = i.value; } };
   const paint = () => {
     v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>${id ? 'Editar prenda' : 'Nueva prenda'}</h2>
       <label class="foto">${foto ? `<img src="${foto}" alt="">` : '<span>📷 Hacer foto o elegir de la galería</span>'}<input type="file" accept="image/*" id="pf" hidden></label>
@@ -537,6 +543,7 @@ function openPrenda(id, pre) {
       <label class="campo"><span>Nombre (opcional)</span><input id="p_nombre" value="${esc(p.nombre || '')}" placeholder="Camiseta blanca de Uniqlo" autocomplete="off"></label>
       <div class="dos"><label class="campo"><span>Talla</span><input id="p_talla" value="${esc(p.talla || '')}" placeholder="M, 42…" autocomplete="off"></label><label class="campo"><span>Precio (€)</span><input id="p_precio" type="number" inputmode="decimal" value="${esc(p.precio || '')}" autocomplete="off"></label></div>
       <label class="campo"><span>Tienda</span><input id="p_tienda" value="${esc(p.tienda || '')}" placeholder="Uniqlo" autocomplete="off"></label>
+      <details class="sub-det" ${CARACT.some(c => p[c[0]]) ? 'open' : ''}><summary>Características (tejido, cintura, largo, cómo te queda…)</summary>${CARACT.filter(c => !c[4] || esAbajo(cat)).map(([k, t, ej, max]) => `<label class="campo"><span>${t}</span><input id="p_${k}" maxlength="${max}" value="${esc(p[k] || '')}" placeholder="${esc(ej)}" autocomplete="off"></label>`).join('')}</details>
       <label class="campo"><span>Notas (cómo te queda, con qué la llevas…)</span><input id="p_notas" value="${esc(p.notas || '')}" autocomplete="off"></label>
       <div class="acts">${id ? '<button class="btn ghost" data-pdel>Borrar</button>' : '<button class="btn ghost" data-close>Cancelar</button>'}<span class="sp"></span><button class="btn" data-pok>Guardar</button></div>`;
   };
@@ -570,7 +577,7 @@ function openPrenda(id, pre) {
     if (!cat) return toast('Elige el tipo de prenda.');
     keep();
     const orig = id ? prenda(id) : {};
-    const o = Object.assign({}, orig, { id: id || uid('p'), nombre: (p.nombre || '').trim(), cat, color, temp, corte: (cat === 'Pantalones' || cat === 'Vaqueros') ? p.corte || '' : '', notas: (p.notas || '').trim(), talla: (p.talla || '').trim(), precio: p.precio ? String(+p.precio) : '', tienda: (p.tienda || '').trim(), fecha: orig.fecha || new Date().toISOString() });
+    const o = Object.assign({}, orig, { id: id || uid('p'), nombre: (p.nombre || '').trim(), cat, color, temp, corte: (cat === 'Pantalones' || cat === 'Vaqueros') ? p.corte || '' : '', notas: (p.notas || '').trim(), talla: (p.talla || '').trim(), precio: p.precio ? String(+p.precio) : '', tienda: (p.tienda || '').trim(), ...Object.fromEntries(CARACT.map(([k]) => [k, (p[k] || '').trim()])),  fecha: orig.fecha || new Date().toISOString() });
     if (foto && foto !== FOTOS[o.id]) { try { await fotoPut(o.id, foto); o.fv = Date.now(); ES.fotoLocal(o.id, o.fv); } catch (er) { toast('No se ha podido guardar la foto: puede que el dispositivo esté sin espacio.'); } }
     D.prendas = id ? D.prendas.map(x => x.id === id ? o : x) : D.prendas.concat(o); save(); v.close(); ui.looks = []; render();
     if (id) toast('Guardada'); else toast('Añadida al armario', ['Añadir otra', () => openPrenda()]);
@@ -803,8 +810,13 @@ const clickApp = e => {
     for (const x of o.prendas) {
       if (!x || !CATS.includes(x.cat) || (x.color && !COLORES.includes(x.color))) { mal++; continue; }
       const nom = txt(x.nombre, 60), extra = { corte: CORTES.includes(x.corte) ? x.corte : '', veredicto: VER[x.veredicto] ? x.veredicto : undefined, consejo: txt(x.consejo, 500), ocasiones: txt(x.ocasiones, 200), combinar: txt(x.combinar, 200), ref: txt(x.ref, 30) };
+      for (const [k, , , max] of CARACT) if (x[k]) extra[k] = txt(x[k], max);
       const ya = D.prendas.find(p => p.cat === x.cat && (p.nombre || '') === nom);
-      if (ya) { Object.assign(ya, extra); dup++; continue; }
+      if (ya) {
+        // Al actualizar también se ponen color, temporada, tienda y talla si vienen en el bloque.
+        if (x.color) ya.color = x.color; if (TEMPS.includes(x.temp)) ya.temp = x.temp; if (x.tienda) ya.tienda = txt(x.tienda, 30); if (x.talla) ya.talla = txt(x.talla, 12);
+        Object.assign(ya, extra); dup++; continue;
+      }
       D.prendas.push(Object.assign({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: txt(x.talla, 12), tienda: txt(x.tienda, 30), precio: '', notas: txt(x.notas, 120), fecha: new Date().toISOString(), usos0: 0 }, extra)); n++;
     }
     // Compras recomendadas: entran en tu lista con el porqué; si ya estaban (mismo nombre), se actualizan.

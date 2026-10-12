@@ -162,3 +162,16 @@ const GUIAS = [
 const VEREDICTOS = [['Quédatela', 'bien', '✅'], ['Quédatela, pero arréglala', 'medio', '🪡'], ['Solo para casa o deporte', 'medio', '🏠'], ['Revisar: pruébatela', 'medio', '🔍'], ['Vender', 'mal', '💰'], ['Donar', 'mal', '🎁'], ['Tirar (reciclar)', 'mal', '♻️']];
 const VER = Object.fromEntries(VEREDICTOS.map(v => [v[0], v]));
 const CORTES = ['Ajustado', 'Recto', 'Ancho', 'Cargo'];
+/* Características de cada prenda: [campo, etiqueta, ejemplo, máximo de letras, solo pantalones y shorts]. */
+const CARACT = [
+  ['tejido', 'Tejido', 'Lino, pana, felpa, algodón…', 80, false],
+  ['cintura', 'Cintura y cierre', 'Goma y cordón; botón y bragueta…', 80, true],
+  ['tiro', 'Tiro', 'Bajo, medio o alto', 60, true],
+  ['largo', 'Largo', 'Al tobillo, encima de la rodilla…', 80, true],
+  ['bajo', 'Bajo', 'Con vuelta, puño elástico, recto…', 80, true],
+  ['bolsillos', 'Bolsillos y detalles', 'Cargo en los muslos, parche, pinzas…', 140, true],
+  ['ajuste', 'Cómo te queda', 'Bien, justo, no cierra, holgado…', 140, false],
+  ['sensacion', 'Cómo se siente', 'Cómodo, aprieta, da calor…', 120, false],
+  ['arreglo', 'Qué arreglar', 'Acortar el bajo, estrechar la pierna…', 160, false],
+  ['cuidado', 'Cuidado', 'Planchar, quitar manchas, ropa interior clara…', 140, false]
+];

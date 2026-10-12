@@ -281,3 +281,9 @@ details.blq li { margin: 8px 0; }
 .lleva > span:first-child { font-size: 22px; }
 .lleva b { display: block; font-size: 15px; font-weight: 650; }
 .lleva small { color: var(--muted); font-size: 13px; }
+
+.carac { margin: 12px 0; padding: 12px 14px; border-radius: 14px; background: var(--denim-soft); }
+.carac dl { margin: 0; display: grid; gap: 6px; }
+.carac dl div { display: grid; grid-template-columns: 112px 1fr; gap: 10px; font-size: 14px; line-height: 1.35; }
+.carac dt { color: var(--muted); font-weight: 600; }
+.carac dd { margin: 0; }
