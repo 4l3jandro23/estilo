@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 17;
+const VERSION = 18;
 const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -320,7 +320,7 @@ function vHoy() {
       <p class="mini">Mañana</p>${r.manana.map((x, i) => `<button class="chk ${hecho.m.includes(i) ? 'ok' : ''}" data-rut="m${i}"><span></span>${esc(x)}</button>`).join('')}
       <p class="mini">Noche</p>${r.noche.map((x, i) => `<button class="chk ${hecho.n.includes(i) ? 'ok' : ''}" data-rut="n${i}"><span></span>${esc(x)}</button>`).join('')}
     </section>
-    ${(() => { const r = resumenPantalones(D.prendas); if (!r.total) return ''; const rc = recoPantalones(D.prendas, D.compras), nl = rc.compra.filter(x => !x.enLista).length; return `<button class="card pantres" data-go="armario"><b>👖 Tus pantalones</b><small>${r.g.bien.length} listos · ${r.g.arreglar.length} para arreglar · ${r.g.vender.length} para vender${nl ? ` · ${nl} ${nl === 1 ? 'recomendación' : 'recomendaciones'} de compra` : ''}</small></button>`; })()}
+    ${(() => { const r = resumenPantalones(D.prendas); if (!r.total) return ''; const rc = recoPantalones(D.prendas, D.compras), nl = rc.compra.filter(x => !x.enLista).length; return `<button class="card pantres" data-go="armario"><b>Tus pantalones</b><small>${r.g.bien.length} listos · ${r.g.arreglar.length} para arreglar · ${r.g.vender.length} para vender${nl ? ` · ${nl} ${nl === 1 ? 'recomendación' : 'recomendaciones'} de compra` : ''}</small></button>`; })()}
     <section class="card etiqueta"><small>Consejo del día</small><p>${esc(tip)}</p></section>`;
 }
 
@@ -378,14 +378,14 @@ function pantalonesHTML() {
   const r = resumenPantalones(D.prendas); if (!r.total) return '';
   const rc = recoPantalones(D.prendas, D.compras), s = r.g;
   const lista = (l, campo) => l.map(p => `<button class="lrow-b" data-ficha="${p.id}"><b>${esc(nombre(p))}</b>${campo && p[campo] ? `<small>${esc(p[campo])}</small>` : ''}</button>`).join('');
-  return `<section class="card pant"><div class="row-h"><h2>👖 Tus pantalones</h2><small class="muted">${r.total} en total</small></div>
-    <div class="chips scroll">${GRUPOS_PANT.map(([k, t, i]) => s[k].length ? `<button class="pill sm ${ui.vf === k ? 'on' : ''}" data-vf="${k}">${i} ${t} <span class="cnt">${s[k].length}</span></button>` : '').join('')}${s.sin.length ? `<button class="pill sm ${ui.vf === 'sin' ? 'on' : ''}" data-vf="sin">Sin revisar <span class="cnt">${s.sin.length}</span></button>` : ''}</div>
+  return `<section class="card pant"><div class="row-h"><h2>Tus pantalones</h2><small class="muted">${r.total} en total</small></div>
+    <div class="chips scroll">${GRUPOS_PANT.map(([k, t, i]) => s[k].length ? `<button class="pill sm ${ui.vf === k ? 'on' : ''}" data-vf="${k}"><i class="dot d-${k}"></i>${t} <span class="cnt">${s[k].length}</span></button>` : '').join('')}${s.sin.length ? `<button class="pill sm ${ui.vf === 'sin' ? 'on' : ''}" data-vf="sin"><i class="dot d-sin"></i>Sin revisar <span class="cnt">${s.sin.length}</span></button>` : ''}</div>
     ${ui.vf ? '<p class="mini-t">Mostrando solo ese grupo. Toca otra vez el botón para ver todo.</p>' : ''}
-    <div class="row"><button class="pill ${D.prendas.some(p => esPant(p) && !FOTOS[p.id]) ? 'on' : ''}" data-act="fotospant">📷 Fotos de tus pantalones${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length ? ` (faltan ${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length})` : ''}</button></div>
-    ${s.arreglar.length ? `<p class="mini">🪡 Para arreglar</p>${lista(s.arreglar, 'arreglo')}` : ''}
-    ${s.vender.length ? `<p class="mini">💰 Para vender o regalar</p>${lista(s.vender, 'ajuste')}` : ''}
-    ${rc.compra.length ? `<p class="mini">⭐ Te recomiendo comprar</p>${rc.compra.map((x, i) => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row">${x.enLista ? '<span class="tag bien">Ya en tu lista</span>' : `<button class="pill sm on" data-reco="${i}">Añadir a mi lista</button>`}</div></div>`).join('')}` : ''}
-    ${rc.avisos.map(t => `<p class="mini-t">💡 ${esc(t)}</p>`).join('')}</section>`;
+    <div class="row"><button class="pill sm" data-act="fotospant">Fotos de tus pantalones${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length ? ` (faltan ${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length})` : ''}</button></div>
+    <details class="pdet" id="pantdet" ${ui.pantOpen ? 'open' : ''}><summary>Qué arreglar, vender y comprar</summary>${s.arreglar.length ? `<p class="mini">Para arreglar</p>${lista(s.arreglar, 'arreglo')}` : ''}
+    ${s.vender.length ? `<p class="mini">Para vender o regalar</p>${lista(s.vender, 'ajuste')}` : ''}
+    ${rc.compra.length ? `<p class="mini"><span class="est">★</span> Te recomiendo comprar</p>${rc.compra.map((x, i) => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row">${x.enLista ? '<span class="tag bien">Ya en tu lista</span>' : `<button class="pill sm on" data-reco="${i}">Añadir a mi lista</button>`}</div></div>`).join('')}` : ''}
+    ${rc.avisos.map(t => `<p class="mini-t">${esc(t)}</p>`).join('')}</details></section>`;
 }
 function resumenRevision() {
   const con = D.prendas.filter(p => p.veredicto);
@@ -453,7 +453,7 @@ function vCompras() {
     <button class="btn full" data-act="locompro">🤔 ¿Lo compro? Compruébalo antes</button>
     <div class="row" style="margin:-4px 0 14px"><button class="pill" data-guia="tiendas">🛍️ Dónde comprar</button><button class="pill" data-guia="vender">♻️ Vender o donar</button></div>
     ${tope ? `<section class="card"><div class="row-h"><h2>Este mes</h2><small class="muted">${eur(gastado)} de ${eur(tope)}</small></div><div class="barra"><span style="width:${Math.min(100, gastado / tope * 100)}%" class="${gastado > tope ? 'pasa' : ''}"></span></div><p class="mini-t">${gastado > tope ? 'Te has pasado del presupuesto que pusiste. Nada grave: el mes que viene, más tranquilo.' : 'Según el presupuesto que pusiste en «Para mí».'}</p></section>` : ''}
-    ${(() => { const rc = recoPantalones(D.prendas, D.compras).compra.filter(x => !x.enLista); return rc.length ? `<section class="card pant"><h2>⭐ Te recomiendo comprar</h2><p class="sub">Según tus pantalones y lo que mejor te queda.</p>${rc.map(x => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row"><span class="tag">${['', 'Urgente', 'Pronto', 'Cuando pueda'][x.prio]}</span><button class="pill sm on" data-reco2="${esc(x.que)}">Añadir a mi lista</button></div></div>`).join('')}</section>` : ''; })()}
+    ${(() => { const rc = recoPantalones(D.prendas, D.compras).compra.filter(x => !x.enLista); return rc.length ? `<section class="card pant"><h2><span class="est">★</span> Te recomiendo comprar</h2><p class="sub">Según tus pantalones y lo que mejor te queda.</p>${rc.map(x => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row"><span class="tag">${['', 'Urgente', 'Pronto', 'Cuando pueda'][x.prio]}</span><button class="pill sm on" data-reco2="${esc(x.que)}">Añadir a mi lista</button></div></div>`).join('')}</section>` : ''; })()}
     <section class="card"><h2>Mi lista</h2>
       ${pend.map(c => `<div class="lrow"><button class="chk" data-comp="${c.id}" aria-label="Marcar como comprado"><span></span></button><span class="b"><b>${c.claude ? '<i class="rec" title="Recomendado por Claude">★</i> ' : ''}${esc(c.que)}</b><small>${['', 'Urgente', 'Pronto', 'Cuando pueda'][c.prio] || ''}${c.precio ? ` · ${esc(c.precio)} €` : ''}${c.donde ? ` · ${esc(c.donde)}` : ''}</small>${c.por ? `<small class="por-c">${esc(c.por)}</small>` : ''}</span>${c.link ? `<a class="pill sm" href="${esc(c.link)}" target="_blank" rel="noopener noreferrer">Ver</a>` : ''}<button class="x" data-compdel="${c.id}" aria-label="Borrar">×</button></div>`).join('') || '<p class="sub">Vacía. Mira abajo lo que te falta.</p>'}
       <button class="pill" data-act="nuevacomp">＋ Añadir</button>
@@ -907,7 +907,7 @@ $('app').addEventListener('change', e => {
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
   if (e.target.id === 'multi' && e.target.files.length) { const fs = [...e.target.files]; e.target.value = ''; subirVarias(fs); }
 });
-$('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; }, true);
+$('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; if (d.id === 'pantdet') ui.pantOpen = d.open; }, true);
 
 // ---------- varias fotos de golpe ----------
 async function subirVarias(files) {

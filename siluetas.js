@@ -43,14 +43,16 @@ function prendaSVG(cat, color, corte, p) {
     if (/rayas/.test(t)) defs.push(...(corto ? ['M40 28 V72', 'M60 28 V72'] : ['M38 26 V108', 'M62 26 V108']));
     if (/parche|bordado|elefante/.test(t)) defs.push('#b:62:40:3.4');
     const tienda = (p.tienda || '').split(/[ (]/)[0].slice(0, 9);
-    if (tienda) etiqueta = `<text x="50" y="${corto ? 52 : 80}" text-anchor="middle" font-size="${corto ? 11 : 9.5}" font-weight="800" fill="${oscuro ? '#fff' : '#161C27'}" stroke="${oscuro ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.6)'}" stroke-width=".7" paint-order="stroke">${esc2(tienda)}</text>`;
+    if (tienda) etiqueta = `<text x="50" y="${corto ? 52 : 80}" text-anchor="middle" font-size="${corto ? (tienda.length > 7 ? 9 : 11) : (tienda.length > 7 ? 7.6 : 9.5)}" font-weight="800" fill="${oscuro ? '#fff' : '#161C27'}" stroke="${oscuro ? 'rgba(0,0,0,.4)' : 'rgba(255,255,255,.6)'}" stroke-width=".7" paint-order="stroke">${esc2(tienda)}</text>`;
   }
   defs.forEach((d, i) => {
     if (d.startsWith('#b:')) { const [, x, y, r] = d.split(':'); det += `<circle cx="${x}" cy="${y}" r="${r}" fill="${linea}"/>`; }
     else if (d.startsWith('#r:')) { const [, x, y, w, h, r] = d.split(':'); body += i === 0 ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${f}" stroke="rgba(0,0,0,.25)" stroke-width="1.5"/>` : `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="none" stroke="${linea}" stroke-width="2.5"/>`; }
-    else if (i === 0) body += `<path d="${d}" fill="${f}" stroke="rgba(0,0,0,.28)" stroke-width="1.5" stroke-linejoin="round"/>`;
-    else det += `<path d="${d}" fill="none" stroke="${linea}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    else if (i === 0) body += `<path d="${d}" fill="${f}" stroke="rgba(0,0,0,.3)" stroke-width="1.2" stroke-linejoin="round"/><path d="${d}" fill="url(#sh${id})" stroke="none"/>`;
+    // En los vaqueros, las costuras son el pespunte ámbar de siempre.
+    else det += cat === 'Vaqueros' ? `<path d="${d}" fill="none" stroke="#E39A3A" stroke-width="1.5" stroke-dasharray="2.6 2.2" stroke-linecap="round" stroke-linejoin="round"/>` : `<path d="${d}" fill="none" stroke="${linea}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
   });
-  const pat = est ? `<defs><pattern id="${id}" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><rect width="14" height="14" fill="#DCE3EE"/><rect width="6" height="14" fill="#6F8DBE"/></pattern></defs>` : '';
+  const luz = `<linearGradient id="sh${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".18"/></linearGradient>`;
+  const pat = `<defs>${luz}${est ? `<pattern id="${id}" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><rect width="14" height="14" fill="#DCE3EE"/><rect width="6" height="14" fill="#6F8DBE"/></pattern>` : ''}</defs>`;
   return `<svg class="sil" viewBox="${cat === 'Pantalón corto' ? '10 12 80 76' : '0 0 100 120'}" aria-hidden="true">${pat}${body}${det}${etiqueta}</svg>`;
 }
