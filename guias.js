@@ -159,7 +159,7 @@ const GUIAS = [
 ];
 
 // Opinión sobre cada prenda: qué hacer con ella.
-const VEREDICTOS = [['Quédatela', 'bien', '✅'], ['Quédatela, pero arréglala', 'medio', '🪡'], ['Solo para casa o deporte', 'medio', '🏠'], ['Revisar: pruébatela', 'medio', '🔍'], ['Vender', 'mal', '💰'], ['Donar', 'mal', '🎁'], ['Tirar (reciclar)', 'mal', '♻️']];
+const VEREDICTOS = [['Quédatela', 'bien', '<i class="dot d-bien"></i>'], ['Quédatela, pero arréglala', 'medio', '<i class="dot d-arreglar"></i>'], ['Solo para casa o deporte', 'medio', '<i class="dot d-casa"></i>'], ['Revisar: pruébatela', 'medio', '<i class="dot d-revisar"></i>'], ['Vender', 'mal', '<i class="dot d-vender"></i>'], ['Donar', 'mal', '<i class="dot d-vender"></i>'], ['Tirar (reciclar)', 'mal', '<i class="dot d-vender"></i>']];
 const VER = Object.fromEntries(VEREDICTOS.map(v => [v[0], v]));
 const CORTES = ['Ajustado', 'Recto', 'Ancho', 'Cargo'];
 /* Características de cada prenda: [campo, etiqueta, ejemplo, máximo de letras, solo pantalones y shorts]. */
