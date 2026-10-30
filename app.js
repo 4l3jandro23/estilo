@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 20;
+const VERSION = 21;
 const BASE = { bajas: [], prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -285,7 +285,7 @@ function generarLooks() {
 }
 
 // ---------- vistas ----------
-function heroHTML(titulo, sub) { return `<header class="hero"><p class="eyebrow">${sub}</p><h1>${titulo}</h1></header>`; }
+function heroHTML(titulo, sub) { return `<header class="hero"><h1>${titulo}</h1>${sub ? `<p class="sub-h">${sub}</p>` : ''}</header>`; }
 
 function vHoy() {
   const p = D.perfil, h = deHoy(), d = new Date();
@@ -298,7 +298,17 @@ function vHoy() {
   const cesta = D.prendas.filter(x => x.estado === 'Para lavar');
   const semana = [...Array(7)].map((_, i) => { const k = diaKey(Date.now() - (6 - i) * 864e5); return [k, D.historial.find(x => x.dia === k)]; });
   const vacioPerfil = Object.keys(p).filter(k => k !== '_f').length < 3;
-  return `${heroHTML('¿Qué me pongo?', `${d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })} ${tiempo}`)}
+  const hora = d.getHours(), saludo = hora < 14 ? 'Buenos días' : hora < 21 ? 'Buenas tardes' : 'Buenas noches';
+  const listas = D.prendas.filter(x => !x.estado && !/^(Vender|Donar|Tirar|Revisar)|arréglala|casa o deporte/.test(x.veredicto || '')).length;
+  const pz = pendientes(), porComprar = D.compras.filter(c => !c.hecho).length;
+  const cifras = D.prendas.length ? `<div class="cifras">
+      <button class="cifra lead" data-go="armario"><small>Listas para ponerte</small><b>${listas}</b><span>de ${D.prendas.length} prendas</span></button>
+      <button class="cifra" data-act="pendientes"><small>Pendientes</small><b>${pz.total}</b><span>${pz.total ? [pz.sastre.length && `${pz.sastre.length} al sastre`, pz.fuera.length && `${pz.fuera.length} a vender`, pz.decidir.length && `${pz.decidir.length} por decidir`].filter(Boolean).join(' · ') : 'Nada que hacer'}</span></button>
+      <button class="cifra" data-go="armario" data-filtro="lavar"><small>Para lavar</small><b>${cesta.length}</b><span>${cesta.length ? 'No te las propongo' : 'Cesta vacía'}</span></button>
+      <button class="cifra" data-go="compras"><small>Por comprar</small><b>${porComprar}</b><span>${porComprar ? 'En tu lista' : 'Lista vacía'}</span></button>
+    </div>` : '';
+  return `<header class="hero saludo"><h1>${saludo}, ${esc(D.perfil.nombre || 'Alejandro')}.</h1><p class="sub-h">${(f => f[0].toUpperCase() + f.slice(1))(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} ${tiempo}</p></header>
+    ${cifras}
     ${h ? `<section class="card puesto"><div class="row-h"><h2>Hoy llevas</h2><button class="pill sm" data-act="quitarhoy">Quitar</button></div><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div></section>` : ''}
     <section class="card costura">
       <div class="row-h"><h2>${h ? 'Otra idea' : 'Tu conjunto para hoy'}</h2>${ui.looks.length > 1 ? `<small class="muted">${ui.lookI + 1} de ${ui.looks.length}</small>` : ''}</div>
@@ -320,7 +330,6 @@ function vHoy() {
       <p class="mini">Mañana</p>${r.manana.map((x, i) => `<button class="chk ${hecho.m.includes(i) ? 'ok' : ''}" data-rut="m${i}"><span></span>${esc(x)}</button>`).join('')}
       <p class="mini">Noche</p>${r.noche.map((x, i) => `<button class="chk ${hecho.n.includes(i) ? 'ok' : ''}" data-rut="n${i}"><span></span>${esc(x)}</button>`).join('')}
     </section>
-    ${(() => { const x = pendientes(), partes = [x.sastre.length && `${x.sastre.length} para el sastre`, x.decidir.length && `${x.decidir.length} por decidir`, x.fuera.length && `${x.fuera.length} para vender`, x.compra.length && `${x.compra.length} por comprar`].filter(Boolean); return partes.length ? `<button class="card pantres" data-act="pendientes"><span><b>Pendientes del armario</b><small>${partes.join(' · ')}</small></span>${IC('flecha')}</button>` : ''; })()}
     <section class="card etiqueta"><small>Consejo del día</small><p>${esc(tip)}</p></section>`;
 }
 
@@ -502,7 +511,7 @@ function vOutfits() {
   const pal = paleta(D.perfil), t = clima();
   return `${heroHTML('Outfits', `Pensados para ti · ${t.toLowerCase()}${TIEMPO ? ` (${TIEMPO.min}–${TIEMPO.max}°)` : ''}`)}${seg}
     <section class="card"><h2>Tu semana</h2><p class="mini-t" style="margin-top:0">Toca la ocasión de un día para cambiarla.</p>
-      <div class="plan">${semana.map(s => `<div class="plan-d ${s.i === 0 ? 'hoy' : ''}"><small>${s.i === 0 ? 'Hoy' : s.d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}</small><button class="pill sm" data-ocdia="${s.d.getDay()}">${s.oc}</button>${s.id ? `<button class="plan-o" data-verout="${s.id.o.id}"><b>${esc(s.id.o.t)}</b><small>${s.id.c.completo ? '✓ lo tienes' : `faltan ${s.id.c.falta.length}`}</small></button>` : ''}</div>`).join('')}</div>
+      <div class="plan">${semana.map(s => `<div class="plan-d ${s.i === 0 ? 'hoy' : ''}"><small>${s.i === 0 ? 'Hoy' : s.d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' })}</small><button class="pill sm" data-ocdia="${s.d.getDay()}">${s.oc}</button>${s.id ? `<button class="plan-o" data-verout="${s.id.o.id}"><b>${esc(s.id.o.t)}</b><small>${s.id.c.completo ? `${IC('check', 'xs')} lo tienes` : `faltan ${s.id.c.falta.length}`}</small></button>` : ''}</div>`).join('')}</div>
     </section>
     ${!pal ? '<section class="card aviso"><p class="sub" style="margin:0">Con tu tono de piel y tu pelo en «Para mí», los colores de cada outfit se ordenan según lo que más te favorece.</p></section>' : ''}
     <div class="chips scroll"><button class="pill sm ${!ui.ideaOc ? 'on' : ''}" data-ideaoc="">Todas</button>${OCASIONES_IDEAS.map(o => `<button class="pill sm ${ui.ideaOc === o ? 'on' : ''}" data-ideaoc="${o}">${o}</button>`).join('')}</div>
@@ -826,7 +835,7 @@ function openLoCompro() {
 
 function openGuia(id) {
   const g = GUIAS.find(x => x.id === id);
-  sheet(`<p class="eyebrow">Guía</p><h2>${esc(g.t)}</h2><ul class="lista-guia">${g.l.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="acts"><span class="sp"></span><button class="btn" data-close>Entendido</button></div>`);
+  sheet(`<h2>${esc(g.t)}</h2><ul class="lista-guia">${g.l.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="acts"><span class="sp"></span><button class="btn" data-close>Entendido</button></div>`);
 }
 
 function openRutina() {
@@ -862,7 +871,7 @@ document.getElementById('tabnav').addEventListener('click', e => { const b = e.t
 $('app').addEventListener('input', e => { if (e.target.id === 'buscar') { ui.q = e.target.value; render(); } if (e.target.dataset.med) { D.perfil.medidas = Object.assign({}, D.perfil.medidas, { [e.target.dataset.med]: e.target.value.trim() }); save(); } });
 const clickApp = e => {
   const t = e.target;
-  const go = t.closest('[data-go]'); if (go) return ir(go.dataset.go);
+  const go = t.closest('[data-go]'); if (go) { if (go.dataset.filtro) ui.filtro = go.dataset.filtro; return ir(go.dataset.go); }
   const c = t.closest('[data-cat]'); if (c) { ui.cat = c.dataset.cat; return render(); }
   const or = t.closest('[data-orden]'); if (or) { ui.orden = or.dataset.orden; return render(); }
   const fi = t.closest('[data-filtro]'); if (fi) { ui.filtro = ui.filtro === fi.dataset.filtro ? '' : fi.dataset.filtro; return render(); }
@@ -1002,7 +1011,7 @@ function clasificar(cola) {
   const paint = () => {
     if (i >= cola.length) { save(); ui.looks = []; v.close(); render(); return toast(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'} al armario.`); }
     const x = cola[i];
-    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><p class="eyebrow">Foto ${i + 1} de ${cola.length}</p><h2>¿Qué prenda es?</h2>
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>¿Qué prenda es?</h2><p class="sub">Foto ${i + 1} de ${cola.length}</p>
       <div class="ficha-foto"><img src="${x.foto}" alt=""></div>
       ${x.nombre ? `<p class="nota n2" style="text-align:center">La IA dice: ${esc(x.nombre)}</p>` : ''}
       <p class="mini">Tipo</p><div class="chips tight">${CATS.map(c => `<button class="pill sm ${x.cat === c ? 'on' : ''}" data-cls="${c}">${c}</button>`).join('')}</div>
