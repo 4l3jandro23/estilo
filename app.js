@@ -8,8 +8,8 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 19;
-const BASE = { prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
+const VERSION = 20;
+const BASE = { bajas: [], prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
 D = Object.assign({}, BASE, D);
@@ -320,7 +320,7 @@ function vHoy() {
       <p class="mini">Mañana</p>${r.manana.map((x, i) => `<button class="chk ${hecho.m.includes(i) ? 'ok' : ''}" data-rut="m${i}"><span></span>${esc(x)}</button>`).join('')}
       <p class="mini">Noche</p>${r.noche.map((x, i) => `<button class="chk ${hecho.n.includes(i) ? 'ok' : ''}" data-rut="n${i}"><span></span>${esc(x)}</button>`).join('')}
     </section>
-    ${(() => { const r = resumenPantalones(D.prendas); if (!r.total) return ''; const rc = recoPantalones(D.prendas, D.compras), nl = rc.compra.filter(x => !x.enLista).length; return `<button class="card pantres" data-go="armario"><b>Tus pantalones</b><small>${r.g.bien.length} listos · ${r.g.arreglar.length} para arreglar · ${r.g.vender.length} para vender${nl ? ` · ${nl} ${nl === 1 ? 'recomendación' : 'recomendaciones'} de compra` : ''}</small></button>`; })()}
+    ${(() => { const x = pendientes(), partes = [x.sastre.length && `${x.sastre.length} para el sastre`, x.decidir.length && `${x.decidir.length} por decidir`, x.fuera.length && `${x.fuera.length} para vender`, x.compra.length && `${x.compra.length} por comprar`].filter(Boolean); return partes.length ? `<button class="card pantres" data-act="pendientes"><span><b>Pendientes del armario</b><small>${partes.join(' · ')}</small></span>${IC('flecha')}</button>` : ''; })()}
     <section class="card etiqueta"><small>Consejo del día</small><p>${esc(tip)}</p></section>`;
 }
 
@@ -349,15 +349,16 @@ function vArmario() {
       <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['revision', 'Revisión'], ['fav', 'Favoritas'], ['lavar', 'Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
       ${pantalonesHTML()}
       ${ui.filtro === 'revision' ? resumenRevision() : ''}
-      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? `<i class="fav">${IC('corazon', 'fill')}</i>` : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${IC(p.estado === 'Para lavar' ? 'cesta' : p.estado === 'Para arreglar' ? 'aguja' : 'caja', 'xs')}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${esPant(p) && (p.tienda || p.corte) ? esc([p.tienda, p.corte].filter(Boolean).join(' · ')) : usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}`
+      ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? `<i class="fav">${IC('corazon', 'fill')}</i>` : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${IC(p.estado === 'Para lavar' ? 'cesta' : p.estado === 'Para arreglar' ? 'aguja' : 'caja', 'xs')}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${esPant(p) && (p.tienda || p.corte) ? esc([p.tienda, p.corte].filter(Boolean).join(' · ')) : usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}
+      ${bajasHTML()}`
     : `<div class="vacio grande"><div class="percha" aria-hidden="true"></div><p><b>Tu armario está vacío.</b></p><p>Haz una foto a cada prenda, colgada en una percha o extendida en la cama, con luz de día. La app detecta el color sola.</p><p class="mini-t">Empieza por lo que más te pones: con 8–10 prendas ya te propongo conjuntos.</p></div>`}`;
 }
 
-function openFotosPant() {
+function openFotosPant(soloPant = true) {
   const v = sheet('');
   const paint = () => {
-    const l = D.prendas.filter(esPant).sort((x, y) => (FOTOS[x.id] ? 1 : 0) - (FOTOS[y.id] ? 1 : 0));
-    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Fotos de tus pantalones</h2><p class="sub">Haz una foto a cada pantalón solo, sobre la cama o colgado, y así los reconoces de un vistazo. Toca «Foto» en cada uno.</p>
+    const l = D.prendas.filter(soloPant ? esPant : () => true).sort((x, y) => (FOTOS[x.id] ? 1 : 0) - (FOTOS[y.id] ? 1 : 0));
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>${soloPant ? 'Fotos de tus pantalones' : 'Fotos de tu ropa'}</h2><p class="sub">Haz una foto a cada prenda sola, sobre la cama o colgada y con luz de día, y así la reconoces de un vistazo. Toca «Foto» en cada uno.</p>
       ${l.map(p => `<div class="lrow fp"><span class="fpt">${thumb(p)}</span><span class="b"><b>${esc(nombre(p))}</b><small>${esc([p.tienda, p.corte, p.largo].filter(Boolean).join(' · '))}</small></span><label class="pill sm ${FOTOS[p.id] ? '' : 'on'}">${FOTOS[p.id] ? 'Cambiar' : `${IC('camara', 'xs')} Foto`}<input type="file" accept="image/*" data-fpid="${p.id}" hidden></label></div>`).join('')}
       <div class="acts"><span class="sp"></span><button class="btn" data-close>Listo</button></div>`;
   };
@@ -367,6 +368,75 @@ function openFotosPant() {
     const p = prenda(i.dataset.fpid); if (!p) return;
     try { const url = await comprimir(i.files[0]); await fotoPut(p.id, url); p.fv = Date.now(); ES.fotoLocal(p.id, p.fv); save(); paint(); render(); toast('Foto guardada'); } catch (er) { toast('No se ha podido guardar la foto.'); }
   });
+}
+
+// ---------- pendientes del armario: sastre, decidir, vender, fotos y compras ----------
+function pendientes() {
+  const P = D.prendas;
+  const sastre = P.filter(p => /arréglala/.test(p.veredicto || '') || p.estado === 'Para arreglar');
+  const fuera = P.filter(p => /^(Vender|Donar|Tirar)/.test(p.veredicto || '') || p.estado === 'Para donar');
+  const decidir = P.filter(p => /^Revisar/.test(p.veredicto || ''));
+  const sinFoto = P.filter(p => !FOTOS[p.id]);
+  const compra = recoPantalones(P, D.compras).compra.filter(x => !x.enLista);
+  return { sastre, fuera, decidir, sinFoto, compra, total: sastre.length + fuera.length + decidir.length };
+}
+function openPendientes() {
+  const v = sheet('');
+  const fila = (p, txt, botones) => `<div class="lrow pend"><span class="fpt">${thumb(p)}</span><span class="b"><b>${esc(nombre(p))}</b>${txt ? `<small>${esc(txt)}</small>` : ''}<span class="row">${botones}</span></span></div>`;
+  const paint = () => {
+    const x = pendientes(), nada = !x.total && !x.sinFoto.length && !x.compra.length;
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Pendientes del armario</h2><p class="sub">Lo que toca hacer con tu ropa. Cuando lo hagas, márcalo y sale de aquí.</p>
+      ${x.sastre.length ? `<p class="mini">Llevar al sastre · ${x.sastre.length}</p>${x.sastre.map(p => fila(p, p.arreglo || 'Arreglo pendiente', `<button class="pill sm on" data-pz="arreglado:${p.id}">${IC('check', 'xs')} Ya está arreglado</button>`)).join('')}<p class="mini-t">Llévalos todos juntos: sale más barato y vas una sola vez.</p>` : ''}
+      ${x.decidir.length ? `<p class="mini">Por decidir · ${x.decidir.length}</p>${x.decidir.map(p => fila(p, p.sensacion || p.ajuste || '', `<button class="pill sm on" data-pz="quedar:${p.id}">Me lo quedo</button><button class="pill sm" data-pz="fuera:${p.id}">Fuera</button>`)).join('')}` : ''}
+      ${x.fuera.length ? `<p class="mini">Vender o regalar · ${x.fuera.length}</p>${x.fuera.map(p => fila(p, [p.tienda, p.talla && 'talla ' + p.talla].filter(Boolean).join(' · '), `<button class="pill sm on" data-pz="vendida:${p.id}">Vendido</button><button class="pill sm" data-pz="donada:${p.id}">Regalado</button>`)).join('')}<p class="mini-t">En Vinted o Wallapop: foto con luz de día, marca, talla y medidas. Lo que no se venda en un mes, a Humana o a un contenedor de ropa.</p>` : ''}
+      ${x.sinFoto.length ? `<p class="mini">Fotos · ${x.sinFoto.length} sin foto</p><button class="pill" data-pz="fotos:">${IC('camara', 'xs')} Hacer fotos a tu ropa</button>` : ''}
+      ${x.compra.length ? `<p class="mini">Te falta comprar · ${x.compra.length}</p>${x.compra.map(c => `<div class="lrow"><span class="b"><b>${esc(c.que)}</b></span></div>`).join('')}<button class="pill" data-pz="compras:">Ver en Compras</button>` : ''}
+      ${nada ? '<div class="vacio"><p><b>No tienes nada pendiente.</b></p><p>Todo tu armario está listo para ponerse.</p></div>' : ''}
+      <div class="acts"><span class="sp"></span><button class="btn" data-close>Listo</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', e => {
+    const b = e.target.closest('[data-pz]'); if (!b) return;
+    const [acc, id] = b.dataset.pz.split(':'), p = prenda(id);
+    if (acc === 'fotos') { v.close(); return openFotosPant(false); }
+    if (acc === 'compras') { v.close(); return ir('compras'); }
+    if (!p) return;
+    if (acc === 'arreglado') { p.veredicto = 'Quédatela'; p.estado = undefined; p.arreglado = hoyKey(); toast('Arreglado: ya cuenta para ponértelo.'); }
+    if (acc === 'quedar') { p.veredicto = 'Quédatela'; toast('Te lo quedas.'); }
+    if (acc === 'fuera') { p.veredicto = 'Vender'; toast('Pasa a «vender o regalar».'); }
+    if (acc === 'vendida' || acc === 'donada') darDeBaja(p, acc === 'vendida' ? 'Vendida' : 'Regalada');
+    save(); ui.looks = []; paint(); render();
+  });
+}
+// Lo vendido o regalado sale del armario, pero se guarda aparte por si quieres recuperarlo.
+function darDeBaja(p, como) {
+  const conj = JSON.parse(JSON.stringify(D.conjuntos));
+  D.bajas = (D.bajas || []).concat(Object.assign({}, p, { baja: como, bajaEl: hoyKey() }));
+  D.prendas = D.prendas.filter(x => x.id !== p.id);
+  D.conjuntos.forEach(c => { c.prendas = c.prendas.filter(x => x !== p.id); }); D.conjuntos = D.conjuntos.filter(c => c.prendas.length > 1);
+  toast(`${como}: sale de tu armario.`, ['Deshacer', () => { D.bajas = D.bajas.filter(x => x.id !== p.id); D.prendas.push(p); D.conjuntos = conj; save(); render(); }]);
+}
+function bajasHTML() {
+  const l = D.bajas || []; if (!l.length) return '';
+  return `<details class="card blq bajas"><summary>Ya no están en tu armario · ${l.length}</summary>${l.slice().reverse().map(p => `<div class="lrow fp"><span class="fpt">${thumb(p)}</span><span class="b"><b>${esc(nombre(p))}</b><small>${esc(p.baja)} · ${esc(fmtDia(p.bajaEl))}</small></span><button class="pill sm" data-recupera="${p.id}">Recuperar</button></div>`).join('')}</details>`;
+}
+
+// ---------- tus tallas y medidas ----------
+const MEDIDAS = [['cintura', 'Cintura', 'cm, a la altura del ombligo'], ['cadera', 'Cadera', 'cm, por la parte más ancha'], ['entrepierna', 'Largo de pierna', 'cm, de la entrepierna al suelo'],
+  ['pecho', 'Ancho de tu camiseta favorita', 'cm, de axila a axila, tendida'], ['largoCamiseta', 'Largo de tu camiseta favorita', 'cm, del hombro al bajo'],
+  ['tallaCamiseta', 'Talla de camiseta', 'M, L, XL…'], ['tallaPantalon', 'Talla de pantalón', '40, 42, 44…'], ['pie', 'Número de pie', '42, 43…']];
+function tallasHTML() {
+  const m = D.perfil.medidas || {};
+  const det = p => [p.tienda, p.talla && 'talla ' + p.talla, p.corte].filter(Boolean).join(' · ');
+  const bien = D.prendas.filter(p => /^Quédatela/.test(p.veredicto || '') && p.tienda && PARTE.abajo.includes(p.cat));
+  const justo = D.prendas.filter(p => p.tienda && /no (te )?cierra|quedan abiertos|muy estrecho|muy ajustado|va justo|te aprieta/i.test([p.ajuste, p.cintura, p.sensacion].join(' ')));
+  const lista = l => l.map(p => `<div class="lrow"><span class="b"><b>${esc(nombre(p))}</b><small>${esc(det(p))}</small></span></div>`).join('');
+  return `<details class="card blq" id="tallasdet" ${ui.tallas ? 'open' : ''}><summary>Tus tallas y medidas</summary>
+    <p class="sub" style="margin-top:10px">Para comprar online sin fallar: antes de pagar, compara estas medidas con la tabla de tallas de la prenda.</p>
+    <div class="dos">${MEDIDAS.map(([k, t, ej]) => `<label class="campo"><span>${t}</span><input data-med="${k}" value="${esc(m[k] || '')}" placeholder="${ej}" autocomplete="off" inputmode="${/talla/.test(k) ? 'text' : 'decimal'}"></label>`).join('')}</div>
+    ${bien.length ? `<p class="mini">Pantalones que te quedan bien</p>${lista(bien)}` : ''}
+    ${justo.length ? `<p class="mini">Te quedan justos o pequeños</p>${lista(justo)}` : ''}
+    <p class="mini-t">Mide con una cinta métrica, sin apretar y sobre ropa fina. Para camisetas, lo más fiable es medir una que te quede bien y compararla con la tabla de la tienda.</p></details>`;
 }
 function añadirReco(x) {
   if (D.compras.some(c => !c.hecho && c.que === x.que)) return toast('Ya está en tu lista.');
@@ -380,7 +450,7 @@ function pantalonesHTML() {
   return `<section class="card pant"><div class="row-h"><h2>Tus pantalones</h2><small class="muted">${r.total} en total</small></div>
     <div class="chips scroll">${GRUPOS_PANT.map(([k, t, i]) => s[k].length ? `<button class="pill sm ${ui.vf === k ? 'on' : ''}" data-vf="${k}"><i class="dot d-${k}"></i>${t} <span class="cnt">${s[k].length}</span></button>` : '').join('')}${s.sin.length ? `<button class="pill sm ${ui.vf === 'sin' ? 'on' : ''}" data-vf="sin"><i class="dot d-sin"></i>Sin revisar <span class="cnt">${s.sin.length}</span></button>` : ''}</div>
     ${ui.vf ? '<p class="mini-t">Mostrando solo ese grupo. Toca otra vez el botón para ver todo.</p>' : ''}
-    <div class="row"><button class="pill sm" data-act="fotospant">Fotos de tus pantalones${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length ? ` (faltan ${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length})` : ''}</button></div>
+    <div class="row"><button class="pill sm on" data-act="pendientes">Pendientes</button><button class="pill sm" data-act="fotospant">Fotos de tus pantalones${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length ? ` (faltan ${D.prendas.filter(p => esPant(p) && !FOTOS[p.id]).length})` : ''}</button></div>
     <details class="pdet" id="pantdet" ${ui.pantOpen ? 'open' : ''}><summary>Qué arreglar, vender y comprar</summary>${s.arreglar.length ? `<p class="mini">Para arreglar</p>${lista(s.arreglar, 'arreglo')}` : ''}
     ${s.vender.length ? `<p class="mini">Para vender o regalar</p>${lista(s.vender, 'ajuste')}` : ''}
     ${rc.compra.length ? `<p class="mini">${IC('estrella', 'est fill')} Te recomiendo comprar</p>${rc.compra.map((x, i) => `<div class="falta"><b>${esc(x.que)}</b><small>${esc(x.por)}</small><div class="row">${x.enLista ? '<span class="tag bien">Ya en tu lista</span>' : `<button class="pill sm on" data-reco="${i}">Añadir a mi lista</button>`}</div></div>`).join('')}` : ''}
@@ -480,6 +550,7 @@ function vYo() {
     <p class="sec">Guías</p>
     <div class="guias">${GUIAS.map(g => `<button class="guia" data-guia="${g.id}"><b>${esc(g.t)}</b>${IC('flecha', 'xs')}</button>`).join('')}</div>
     <p class="sec">Tus datos y ajustes</p>
+    ${tallasHTML()}
     <details class="card blq" ${ui.datos ? 'open' : ''}><summary>Mis datos</summary>${relleno >= 6 ? `<div class="campo"><span>Pegar datos de Claude</span>${pegar}</div>` : ''}${PERFIL_CAMPOS.map(campo).join('')}</details>
     ${syncHTML()}
     ${iaHTML()}
@@ -788,7 +859,7 @@ function marcaFecha(k) { if (!CAMBIANTES.includes(k)) return; D.perfil._f = Obje
 
 // ---------- eventos ----------
 document.getElementById('tabnav').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) ir(b.dataset.tab); });
-$('app').addEventListener('input', e => { if (e.target.id === 'buscar') { ui.q = e.target.value; render(); } });
+$('app').addEventListener('input', e => { if (e.target.id === 'buscar') { ui.q = e.target.value; render(); } if (e.target.dataset.med) { D.perfil.medidas = Object.assign({}, D.perfil.medidas, { [e.target.dataset.med]: e.target.value.trim() }); save(); } });
 const clickApp = e => {
   const t = e.target;
   const go = t.closest('[data-go]'); if (go) return ir(go.dataset.go);
@@ -816,6 +887,7 @@ const clickApp = e => {
   const cp = t.closest('[data-conjpuesto]'); if (cp) { const cj = D.conjuntos.find(x => x.id === cp.dataset.conjpuesto); return ponerHoy(cj.prendas, cj.ocasion); }
   const cf = t.closest('[data-conjfav]'); if (cf) { const cj = D.conjuntos.find(x => x.id === cf.dataset.conjfav); cj.fav = !cj.fav; save(); return render(); }
   const ce = t.closest('[data-conjedit]'); if (ce) return openConjunto(null, ce.dataset.conjedit);
+  const rcp = t.closest('[data-recupera]'); if (rcp) { const p = (D.bajas || []).find(x => x.id === rcp.dataset.recupera); if (p) { D.bajas = D.bajas.filter(x => x !== p); const q = Object.assign({}, p); delete q.baja; delete q.bajaEl; D.prendas.push(q); save(); render(); toast('Vuelve a tu armario.'); } return; }
   const vf = t.closest('[data-vf]'); if (vf) { ui.vf = ui.vf === vf.dataset.vf ? '' : vf.dataset.vf; return render(); }
   const rc1 = t.closest('[data-reco]'); if (rc1) { const x = recoPantalones(D.prendas, D.compras).compra[+rc1.dataset.reco]; if (x) añadirReco(x); return; }
   const rc2 = t.closest('[data-reco2]'); if (rc2) { const x = recoPantalones(D.prendas, D.compras).compra.find(y => y.que === rc2.dataset.reco2); if (x) añadirReco(x); return; }
@@ -834,6 +906,7 @@ const clickApp = e => {
   if (act === 'nuevacomp') return openCompra();
   if (act === 'locompro') return openLoCompro();
   if (act === 'fotospant') return openFotosPant();
+  if (act === 'pendientes') return openPendientes();
   if (act === 'rutinaedit') return openRutina();
   if (act === 'otro') { if (!ui.looks.length) return; ui.lookI = (ui.lookI + 1) % ui.looks.length; return render(); }
   if (act === 'puesto') { const l = ui.looks[ui.lookI]; if (l) { ponerHoy(l.ids, ui.ocasion); ui.lock = []; } return; }
@@ -906,7 +979,7 @@ $('app').addEventListener('change', e => {
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
   if (e.target.id === 'multi' && e.target.files.length) { const fs = [...e.target.files]; e.target.value = ''; subirVarias(fs); }
 });
-$('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; if (d.id === 'pantdet') ui.pantOpen = d.open; }, true);
+$('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; if (d.id === 'pantdet') ui.pantOpen = d.open; if (d.id === 'tallasdet') ui.tallas = d.open; }, true);
 
 // ---------- varias fotos de golpe ----------
 async function subirVarias(files) {

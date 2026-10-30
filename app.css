@@ -118,7 +118,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--ink); backgroun
 .prenda img, .prenda .nofoto, .lk img, .lk .nofoto, .ficha-foto img, .ficha-foto .nofoto { width: 100%; aspect-ratio: 3/4; object-fit: cover; display: grid; place-items: center; }
 .nofoto { background: radial-gradient(120% 90% at 50% 30%, color-mix(in srgb, var(--tile) 70%, #fff) 0%, var(--tile) 70%); }
 @media (prefers-color-scheme: dark) { .nofoto { background: radial-gradient(120% 90% at 50% 30%, #26272D 0%, var(--tile) 70%); } }
-.nofoto .sil { width: 66%; height: auto; filter: drop-shadow(0 8px 10px rgba(17, 18, 22, .16)); }
+.nofoto .sil { width: 74%; height: auto; max-height: 86%; }
 .mini-look .nofoto .sil { width: 88%; }
 .pz .lk .nofoto .sil { width: 80%; }
 .acciones { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin: 0 0 14px; }
@@ -356,3 +356,13 @@ details.blq li { margin: 8px 0; }
 .fp .b small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
 
 .sil text { font-family: var(--font); }
+
+/* Pendientes, archivo y tallas */
+.pend { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; }
+.pend .fpt img, .pend .fpt .nofoto { width: 52px; aspect-ratio: 3/4; border-radius: 10px; object-fit: cover; display: grid; place-items: center; }
+.pend .row { margin-top: 8px; }
+.pantres { flex-direction: row !important; align-items: center; justify-content: space-between; gap: 12px; }
+.pantres > span { display: flex; flex-direction: column; gap: 2px; }
+.pantres > .ic { color: var(--muted); }
+.bajas { margin-top: 22px; }
+.bajas .fp { margin-top: 4px; }
