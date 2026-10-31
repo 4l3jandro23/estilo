@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'estilo-v21';
+const CACHE_VERSION = 'estilo-v22';
 const APP_SHELL = ['./', './index.html', './app.css', './app.js', './consejos.js', './guias.js', './siluetas.js', './outfits.js', './pantalones.js', './esync.js', './fonts/instrument.woff2', './fonts/instrument-serif.woff2', './icons.js', './manifest.json', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', e => {

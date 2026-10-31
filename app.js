@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 21;
+const VERSION = 22;
 const BASE = { bajas: [], prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -564,7 +564,8 @@ function vYo() {
     ${syncHTML()}
     ${iaHTML()}
     <details class="card blq"><summary>Copia de seguridad</summary><p class="sub" style="margin-top:10px">Un archivo con todo (también las fotos) por si cambias de dispositivo o quieres guardarlo aparte.</p>
-      <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div></details>
+      <div class="row"><button class="pill" data-act="exportar">Descargar copia</button><label class="pill">Restaurar copia<input type="file" accept="application/json,.json" id="imp" hidden></label></div>
+      <p class="sub" style="margin-top:16px">Si Claude te ha preparado un archivo con fotos de tu ropa, ábrelo aquí: cada foto va a su prenda y no se borra nada más.</p><div class="row"><label class="pill on">Importar fotos de Claude<input type="file" accept="application/json,.json" id="impfotos" hidden></label></div></details>
     <p class="pie">Estilo · versión ${VERSION} · tus datos se quedan en tus dispositivos${ES.status().on ? ' y cifrados en tu GitHub' : ''}.</p>`;
 }
 
@@ -986,6 +987,7 @@ $('app').addEventListener('click', clickApp);
 $('app').addEventListener('change', e => {
   const i = e.target.closest('[data-pfin]'); if (i) { D.perfil[i.dataset.pfin] = i.value.trim() || undefined; marcaFecha(i.dataset.pfin); save(); if (CAMBIANTES.includes(i.dataset.pfin)) { const y = window.scrollY; ui.datos = true; render(); window.scrollTo(0, y); } return; }
   if (e.target.id === 'imp' && e.target.files[0]) importar(e.target.files[0]);
+  if (e.target.id === 'impfotos' && e.target.files[0]) importarFotos(e.target.files[0]);
   if (e.target.id === 'multi' && e.target.files.length) { const fs = [...e.target.files]; e.target.value = ''; subirVarias(fs); }
 });
 $('app').addEventListener('toggle', e => { const d = e.target; if (d.id === 'syncbox') ui.syncOpen = d.open; if (d.id === 'pantdet') ui.pantOpen = d.open; if (d.id === 'tallasdet') ui.tallas = d.open; }, true);
@@ -1032,6 +1034,21 @@ function clasificar(cola) {
 function exportar() {
   const blob = new Blob([JSON.stringify({ app: 'estilo', v: 2, fecha: new Date().toISOString(), datos: D, fotos: FOTOS })], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `estilo-copia-${hoyKey()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+// Fotos preparadas por Claude: { fotos: [{ nombre, cat, img }] }. Cada una va a la prenda con ese nombre y tipo;
+// no toca nada más. Las que no encuentran prenda se cuentan aparte.
+async function importarFotos(f) {
+  try {
+    const j = JSON.parse(await f.text()), l = Array.isArray(j.fotos) ? j.fotos : [];
+    let n = 0, sin = 0; const ahora = Date.now();
+    for (const x of l) {
+      const p = D.prendas.find(q => q.cat === x.cat && (q.nombre || '') === x.nombre);
+      if (!p || !/^data:image\/(jpeg|png|webp);base64,/.test(x.img || '')) { sin++; continue; }
+      await fotoPut(p.id, x.img); p.fv = ahora; ES.fotoLocal(p.id, ahora); n++;
+    }
+    save(); ui.looks = []; render();
+    toast(`${n} ${n === 1 ? 'foto puesta' : 'fotos puestas'}${sin ? ` · ${sin} sin prenda que coincida` : ''}.`);
+  } catch (e) { toast('Ese archivo no es de fotos de Estilo.'); }
 }
 async function importar(f) {
   try {
