@@ -83,7 +83,7 @@ const GUIAS = [
     'Los vaqueros, poco y del revés. No hace falta lavarlos cada vez.',
     'Los jerséis de punto, doblados, nunca colgados (se deforman).',
     'Camisas: tiéndelas en percha nada más sacarlas y casi no necesitarás plancha.',
-    'Zapatillas blancas: un cepillo con agua y jabón cada semana o dos. Se nota muchísimo.',
+    'Zapatillas blancas: si son de piel lisa, basta un paño húmedo tras cada uso y cepillo con jabón cada semana o dos. Un spray protector el primer día ayuda mucho. Si te da pereza, elige blanco roto.',
     'Las bolitas de los jerséis se quitan con un quitapelusas eléctrico (unos 10 €).'
   ] },
   { id: 'barberia', t: 'Qué pedir en la barbería', i: '💈', l: [

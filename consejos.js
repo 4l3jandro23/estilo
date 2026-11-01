@@ -39,7 +39,7 @@ const BASICOS = [
   { n: 'Una chaqueta para el entretiempo (vaquera, sobrecamisa o bomber) y un abrigo', cat: 'Chaquetas y abrigos', min: 2, por: 'Una buena chaqueta sube cualquier conjunto sencillo.' },
   { n: 'Vaqueros rectos o ajustados (sin rotos), azul oscuro y uno más', cat: 'Vaqueros', min: 2, por: 'El azul oscuro es el más versátil y el que más estiliza.' },
   { n: 'Un pantalón chino (beis o azul marino)', cat: 'Pantalones', min: 1, por: 'Para cuando quieres algo distinto a vaqueros.' },
-  { n: 'Zapatillas blancas o neutras limpias', cat: 'Zapatillas', min: 2, por: 'Las zapatillas limpias dicen mucho. Las sucias, también.' },
+  { n: 'Zapatillas de piel lisa en blanco roto (hueso o crema) o neutras', cat: 'Zapatillas', min: 2, por: 'Combinan con todo. El blanco roto disimula mucho mejor la suciedad que el blanco puro, y la piel lisa se limpia con un paño húmedo. Échales un spray protector el primer día.' },
   { n: 'Unos zapatos o botines', cat: 'Zapatos', min: 1, por: 'Para ocasiones en las que las zapatillas no pegan.' },
   { n: 'Un cinturón marrón o negro y un reloj sencillo', cat: 'Accesorios', min: 1, por: 'Pequeños detalles que hacen que el conjunto parezca pensado.' }
 ];
