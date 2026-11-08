@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 23;
+const VERSION = 25;
 const BASE = { bajas: [], prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -23,7 +23,7 @@ const save = () => {
   ES.touch(old, D);
 };
 
-const ui = { vf: '', outSeg: 'ideas', ideaOc: '', tab: 'hoy', cat: '', orden: 'recientes', filtro: '', q: '', ocasion: 'Diario', looks: [], lookI: 0, lock: [], conjOc: '' };
+const ui = { tienda: "", vf: '', outSeg: 'ideas', ideaOc: '', tab: 'hoy', cat: '', orden: 'recientes', filtro: '', q: '', ocasion: 'Diario', looks: [], lookI: 0, lock: [], conjOc: '' };
 
 // ---------- fotos en IndexedDB ----------
 const FOTOS = {};
@@ -228,7 +228,7 @@ function sheet(html) {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { const v = [...document.querySelectorAll('.veil')].pop(); if (v) v.close(); } });
 const swatch = c => `<span class="sw" style="background:${HEX[c] || '#ccc'}"></span>`;
-const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto">${prendaSVG(p.cat, p.color, p.corte, p)}</span>`;
+const thumb = p => FOTOS[p.id] ? `<img src="${FOTOS[p.id]}" alt="" loading="lazy">` : `<span class="nofoto" data-c="${esc(p.cat)}">${prendaSVG(p.cat, p.color, p.corte, p)}</span>`;
 const prenda = id => D.prendas.find(p => p.id === id);
 // Nombre automático con concordancia: «camiseta blanca», «zapatillas negras», «vaqueros azul marino».
 const SING = { Camisetas: ['Camiseta', 'f'], Camisas: ['Camisa', 'f'], Polos: ['Polo', 'm'], 'Sudaderas y jerséis': ['Jersey', 'm'], 'Chaquetas y abrigos': ['Chaqueta', 'f'], Vaqueros: ['Vaqueros', 'mp'], Pantalones: ['Pantalón', 'm'], 'Pantalón corto': ['Pantalón corto', 'm'], Zapatillas: ['Zapatillas', 'fp'], Zapatos: ['Zapatos', 'mp'], Accesorios: ['Accesorio', 'm'], Deporte: ['Ropa de deporte', 'f'], Casa: ['Ropa de casa', 'f'] };
@@ -308,7 +308,7 @@ function vHoy() {
       <button class="cifra" data-go="compras"><small>Por comprar</small><b>${porComprar}</b><span>${porComprar ? 'En tu lista' : 'Lista vacía'}</span></button>
     </div>` : '';
   return `<header class="hero saludo"><h1>${saludo}, ${esc(D.perfil.nombre || 'Alejandro')}.</h1><p class="sub-h">${(f => f[0].toUpperCase() + f.slice(1))(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} ${tiempo}</p></header>
-    ${cifras}
+    ${cifras}${D.prendas.length ? atajosHTML() : ''}
     ${h ? `<section class="card puesto"><div class="row-h"><h2>Hoy llevas</h2><button class="pill sm" data-act="quitarhoy">Quitar</button></div><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div></section>` : ''}
     <section class="card costura">
       <div class="row-h"><h2>${h ? 'Otra idea' : 'Tu conjunto para hoy'}</h2>${ui.looks.length > 1 ? `<small class="muted">${ui.lookI + 1} de ${ui.looks.length}</small>` : ''}</div>
@@ -335,7 +335,7 @@ function vHoy() {
 
 function listaArmario() {
   const q = ui.q.trim().toLowerCase();
-  let l = D.prendas.filter(p => (!ui.cat || p.cat === ui.cat) && (!q || [nombre(p), p.cat, p.color, p.tienda, p.notas, p.corte, p.formalidad, p.veredicto].concat(CARACT.map(c => p[c[0]])).join(' ').toLowerCase().includes(q)));
+  let l = D.prendas.filter(p => (!ui.cat || p.cat === ui.cat) && (!ui.tienda || p.tienda === ui.tienda) && (!q || [nombre(p), p.cat, p.color, p.tienda, p.notas, p.corte, p.formalidad, p.veredicto].concat(CARACT.map(c => p[c[0]])).join(' ').toLowerCase().includes(q)));
   if (ui.vf) { const gr = GRUPOS_PANT.find(x => x[0] === ui.vf); l = l.filter(p => esPant(p) && (ui.vf === 'sin' ? !p.veredicto : gr && gr[3](p.veredicto || ''))); }
   if (ui.filtro === 'fav') l = l.filter(p => p.fav);
   if (ui.filtro === 'lavar') l = l.filter(p => p.estado === 'Para lavar');
@@ -356,6 +356,7 @@ function vArmario() {
       <input type="search" class="buscar" id="buscar" placeholder="Buscar: camisa, azul, Uniqlo…" value="${esc(ui.q)}" autocomplete="off">
       <div class="tabs scroll"><button class="tab ${!ui.cat ? 'on' : ''}" data-cat="">Todo</button>${cats.map(c => `<button class="tab ${ui.cat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)} <span class="cnt">${D.prendas.filter(p => p.cat === c).length}</span></button>`).join('')}</div>
       <div class="chips scroll"><span class="lbl">Ordenar</span>${[['recientes', 'Recientes'], ['mas', 'Más puestas'], ['menos', 'Menos puestas'], ['tipo', 'Tipo'], ['color', 'Color']].map(([k, t]) => `<button class="pill sm ${ui.orden === k ? 'on' : ''}" data-orden="${k}">${t}</button>`).join('')}<span class="lbl">Ver</span>${[['revision', 'Revisión'], ['fav', 'Favoritas'], ['lavar', 'Para lavar'], ['donar', 'Arreglar o donar']].map(([k, t]) => `<button class="pill sm ${ui.filtro === k ? 'on' : ''}" data-filtro="${k}">${t}</button>`).join('')}</div>
+      ${tiendasHTML()}
       ${pantalonesHTML()}
       ${ui.filtro === 'revision' ? resumenRevision() : ''}
       ${l.length ? `<div class="grid">${l.map(p => `<button class="prenda" data-ficha="${p.id}">${thumb(p)}${p.fav ? `<i class="fav">${IC('corazon', 'fill')}</i>` : ''}${p.veredicto && VER[p.veredicto] && p.veredicto !== 'Quédatela' ? `<i class="vbadge ${VER[p.veredicto][1]}" title="${esc(p.veredicto)}">${VER[p.veredicto][2]}</i>` : ''}${p.estado ? `<i class="badge">${IC(p.estado === 'Para lavar' ? 'cesta' : p.estado === 'Para arreglar' ? 'aguja' : 'caja', 'xs')}</i>` : ''}<span class="pn"><b>${esc(nombre(p))}</b><small>${swatch(p.color)}${esPant(p) && (p.tienda || p.corte) ? esc([p.tienda, p.corte].filter(Boolean).join(' · ')) : usos(p) ? `${usos(p)} ${usos(p) === 1 ? 'vez' : 'veces'}` : 'sin estrenar'}</small></span></button>`).join('')}</div>` : '<div class="vacio"><p>Nada con estos filtros.</p></div>'}
