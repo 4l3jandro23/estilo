@@ -3,6 +3,7 @@
    solo la última maleta en este dispositivo. */
 'use strict';
 ICONOS.grafico = '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>';
+ICONOS.calendario = '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>';
 ICONOS.maleta = '<rect x="3" y="8" width="18" height="12" rx="3"/><path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>';
 
 // Tono de cada categoría, el mismo que en las siluetas (--t-… / --i-… del CSS).
@@ -12,7 +13,7 @@ const sale = p => /^(Vender|Donar|Tirar)/.test(p.veredicto || '');
 
 function barras(filas, tono) {
   const max = Math.max(1, ...filas.map(f => f.n));
-  return `<div class="barras">${filas.map(f => `<div class="bar-f"><span class="bar-t">${f.sw || ''}${esc(f.t)}</span><span class="bar-b"><i style="width:${Math.max(6, f.n / max * 100)}%;${f.hex ? `--tt:${f.hex};--ii:rgba(0,0,0,.18)` : `--tt:var(--t-${f.tono || tono});--ii:var(--i-${f.tono || tono})`}"></i></span><b>${f.v != null ? f.v : f.n}</b></div>`).join('')}</div>`;
+  return `<div class="barras">${filas.map(f => `<div class="bar-f"><span class="bar-t">${f.sw || ''}${esc(f.t)}</span><span class="bar-b"><i style="width:${Math.max(6, f.n / max * 100)}%;${f.hex ? `--tt:${f.hex}` : ''}"></i></span><b>${f.v != null ? f.v : f.n}</b></div>`).join('')}</div>`;
 }
 function cuenta(l, clave) { const m = {}; l.forEach(p => { const k = clave(p); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); }
 
@@ -120,13 +121,63 @@ function openMaleta() {
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   if (b.dataset.act === 'informe') openInforme();
+  else if (b.dataset.act === 'diario') openDiario();
   else if (b.dataset.act === 'maleta') openMaleta();
 });
 
 // Tres atajos en Hoy y el filtro por tienda en Armario.
-const atajosHTML = () => `<div class="atajos"><button class="atajo" data-act="informe">${IC('grafico')}<span>Tu armario en cifras</span></button><button class="atajo" data-act="maleta">${IC('maleta')}<span>Maleta de viaje</span></button><button class="atajo" data-act="locompro">${IC('pregunta')}<span>¿Lo compro?</span></button></div>`;
+const atajosHTML = () => `<div class="atajos"><button class="atajo" data-act="diario">${IC('calendario')}<span>Diario de looks</span></button><button class="atajo" data-act="informe">${IC('grafico')}<span>Armario en cifras</span></button><button class="atajo" data-act="maleta">${IC('maleta')}<span>Maleta de viaje</span></button><button class="atajo" data-act="locompro">${IC('pregunta')}<span>¿Lo compro?</span></button></div>`;
 const tiendasHTML = () => {
   const t = cuenta(D.prendas, p => p.tienda); if (t.length < 2) return '';
   return `<div class="chips scroll"><span class="lbl">Tienda</span><button class="pill sm ${!ui.tienda ? 'on' : ''}" data-tienda="">Todas</button>${t.map(([n, k]) => `<button class="pill sm ${ui.tienda === n ? 'on' : ''}" data-tienda="${esc(n)}">${esc(n)} <span class="cnt">${k}</span></button>`).join('')}</div>`;
 };
 document.addEventListener('click', e => { const b = e.target.closest('[data-tienda]'); if (b) { ui.tienda = b.dataset.tienda; render(); } });
+
+// ---------- Rescata: lo que lleva tiempo sin salir ----------
+const DIAS_OLVIDO = 45;
+function olvidadas() {
+  return D.prendas.filter(p => !p.estado && !sale(p)).map(p => {
+    const u = ultimo(p), d = u ? dias(u) : dias((p.fecha || '').slice(0, 10) || hoyKey());
+    return { p, d, nunca: !u };
+  }).filter(x => x.d >= DIAS_OLVIDO).sort((a, b) => b.d - a.d).slice(0, 8);
+}
+function rescataHTML() {
+  const l = olvidadas().slice(0, 4); if (!l.length) return '';
+  return `<section class="card rescata"><div class="row-h"><h2>Rescata lo que no sacas</h2><small class="muted">${l.length === 1 ? '1 prenda' : 'las ' + l.length + ' más olvidadas'}</small></div>
+    ${l.map(({ p, d, nunca }) => `<div class="rr"><button class="rr-f" data-ficha="${p.id}"><span class="fpt mt">${thumb(p)}</span><span class="b"><b>${esc(nombre(p))}</b><small>${nunca ? `Sin estrenar · ${d} días` : `Hace ${d} días`}</small></span></button><button class="pill sm on" data-resc="${p.id}">Ponérmela</button></div>`).join('')}</section>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-resc]'); if (!b) return;
+  ui.lock = [b.dataset.resc]; ui.looks = []; ui.lookI = 0; ui.tab = 'hoy'; render(); window.scrollTo(0, 0);
+  toast('Te armo un conjunto con esa prenda.');
+});
+
+// ---------- Diario: el mes en una cuadrícula ----------
+function openDiario() {
+  const v = sheet(''); let off = 0, sel = null;
+  const paint = () => {
+    const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + off);
+    const y = base.getFullYear(), m = base.getMonth(), primero = (base.getDay() + 6) % 7, nd = new Date(y, m + 1, 0).getDate();
+    const key = d => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const porDia = {}; D.historial.forEach(h => { if (h.dia && h.dia.startsWith(key(1).slice(0, 8))) (porDia[h.dia] = porDia[h.dia] || []).push(h); });
+    const ids = Object.values(porDia).flat().flatMap(h => h.prendas), rep = cuenta(ids.map(id => prenda(id)).filter(Boolean), p => nombre(p))[0];
+    const celdas = [...Array(primero)].map(() => '<span class="dd vacio-d"></span>').concat([...Array(nd)].map((_, i) => {
+      const k = key(i + 1), h = porDia[k], pz = h ? h[0].prendas.map(prenda).filter(Boolean).slice(0, 2) : [];
+      return `<button class="dd ${k === hoyKey() ? 'hoy' : ''}" data-dd="${k}" aria-label="Día ${i + 1}"><i>${i + 1}</i>${pz.length ? `<span class="ms">${pz.map(thumb).join('')}</span>` : ''}</button>`;
+    }));
+    const det = sel && porDia[sel] ? porDia[sel].map(h => `<p class="mini">${new Date(sel + 'T12:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}${h.ocasion ? ' · ' + esc(h.ocasion) : ''}</p><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(p => `<button class="lk" data-ficha="${p.id}">${thumb(p)}<small>${esc(nombre(p))}</small></button>`).join('')}</div>`).join('') : sel ? '<p class="mini-t">Ese día no apuntaste ningún look.</p>' : '';
+    v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Diario de looks</h2>
+      <p class="sub">${Object.keys(porDia).length ? `${Object.keys(porDia).length} ${Object.keys(porDia).length === 1 ? 'día' : 'días'} con look este mes${rep ? ` · lo que más repites: ${esc(rep[0])} (${rep[1]})` : ''}.` : 'Cada vez que pulses «Me lo pongo» queda aquí, para ver qué te has puesto y qué repites.'}</p>
+      <div class="mes-nav"><button class="pill" data-mm="-1" aria-label="Mes anterior">‹</button><b>${base.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</b><button class="pill" data-mm="1" aria-label="Mes siguiente">›</button></div>
+      <div class="mes">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(c => `<span class="cab">${c}</span>`).join('')}${celdas.join('')}</div>
+      <div class="dia-det">${det}</div>
+      <div class="acts"><span class="sp"></span><button class="btn" data-close>Cerrar</button></div>`;
+  };
+  paint();
+  v.addEventListener('click', e => {
+    const mm = e.target.closest('[data-mm]'), dd = e.target.closest('[data-dd]'), f = e.target.closest('[data-ficha]');
+    if (mm) { off += +mm.dataset.mm; sel = null; paint(); }
+    else if (dd) { sel = dd.dataset.dd; paint(); }
+    else if (f) { v.close(); openPrenda(f.dataset.ficha); }
+  });
+}

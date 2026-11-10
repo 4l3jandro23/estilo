@@ -8,7 +8,7 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 const diaKey = (d = new Date()) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
 const hoyKey = () => diaKey();
 const KEY = 'estiloDatos';
-const VERSION = 25;
+const VERSION = 26;
 const BASE = { bajas: [], prendas: [], conjuntos: [], compras: [], perfil: {}, rutina: {}, historial: [], rutinaPasos: null, semanaOc: null };
 
 let D = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
@@ -308,7 +308,6 @@ function vHoy() {
       <button class="cifra" data-go="compras"><small>Por comprar</small><b>${porComprar}</b><span>${porComprar ? 'En tu lista' : 'Lista vacía'}</span></button>
     </div>` : '';
   return `<header class="hero saludo"><h1>${saludo}, ${esc(D.perfil.nombre || 'Alejandro')}.</h1><p class="sub-h">${(f => f[0].toUpperCase() + f.slice(1))(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))} ${tiempo}</p></header>
-    ${cifras}${D.prendas.length ? atajosHTML() : ''}
     ${h ? `<section class="card puesto"><div class="row-h"><h2>Hoy llevas</h2><button class="pill sm" data-act="quitarhoy">Quitar</button></div><div class="look sm">${h.prendas.map(prenda).filter(Boolean).map(x => `<button class="lk" data-ficha="${x.id}">${thumb(x)}</button>`).join('')}</div></section>` : ''}
     <section class="card costura">
       <div class="row-h"><h2>${h ? 'Otra idea' : 'Tu conjunto para hoy'}</h2>${ui.looks.length > 1 ? `<small class="muted">${ui.lookI + 1} de ${ui.looks.length}</small>` : ''}</div>
@@ -321,6 +320,7 @@ function vHoy() {
       : D.prendas.length ? `<p class="sub">No encuentro combinación con lo que tienes disponible${ui.ocasion !== 'Diario' ? ' para esta ocasión' : ''}. Hace falta al menos una prenda de arriba y una de abajo limpias y para este tiempo.</p>${cesta.length ? '<button class="pill" data-act="lavado">Ya he lavado la ropa</button>' : ''}`
       : `<p class="sub">Añade tu ropa al armario y te propongo conjuntos según el tiempo que hace y la ocasión.</p><button class="btn" data-act="nueva">${IC('mas')} Añadir mi primera prenda</button>`}
     </section>
+    ${cifras}${D.prendas.length ? atajosHTML() + rescataHTML() : ''}
     ${tiempoHTML()}
     ${vacioPerfil ? `<div class="card aviso"><h2>Hazla tuya</h2><p class="sub">Con tus datos (piel, cara, complexión…) los consejos y la paleta dejan de ser generales.</p><button class="pill on" data-go="yo">Ir a «Para mí»</button></div>` : ''}
     ${(() => { const oc = ocDia(0), x = ideaPara(oc); return x ? `<p class="sec">Idea para hoy · ${oc.toLowerCase()}</p>${outfitHTML(x, true)}<button class="pill sm" data-go="conjuntos" style="margin:-4px 0 14px">Ver más outfits y tu semana</button>` : ''; })()}
@@ -557,8 +557,7 @@ function vYo() {
     ${cs.length ? `<p class="sec">Tus consejos</p>${cs.map(([t, l]) => `<details class="card blq"><summary>${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}
       <details class="card blq"><summary>Productos para ti</summary><ul>${pr.map(([t, x]) => `<li><b>${esc(t)}:</b> ${esc(x)}</li>`).join('')}</ul><p class="mini-t">Son ejemplos fáciles de encontrar en farmacias y droguerías. No hace falta comprarlo todo de golpe: empieza por el protector solar.</p></details>`
       : '<section class="card etiqueta"><p>Rellena al menos tono de piel, complexión y forma de cara para ver tus consejos y tu paleta.</p></section>'}
-    <p class="sec">Guías</p>
-    <div class="guias">${GUIAS.map(g => `<button class="guia" data-guia="${g.id}"><b>${esc(g.t)}</b>${IC('flecha', 'xs')}</button>`).join('')}</div>
+    <details class="card blq"><summary>Guías <span class="tag">${GUIAS.length}</span></summary><div class="guias" style="margin-top:8px;padding:0">${GUIAS.map(g => `<button class="guia" data-guia="${g.id}"><b>${esc(g.t)}</b>${IC('flecha', 'xs')}</button>`).join('')}</div></details>
     <p class="sec">Tus datos y ajustes</p>
     ${tallasHTML()}
     <details class="card blq" ${ui.datos ? 'open' : ''}><summary>Mis datos</summary>${relleno >= 6 ? `<div class="campo"><span>Pegar datos de Claude</span>${pegar}</div>` : ''}${PERFIL_CAMPOS.map(campo).join('')}</details>
@@ -595,8 +594,9 @@ function iaHTML() {
 
 const VISTAS = { hoy: vHoy, armario: vArmario, conjuntos: vOutfits, compras: vCompras, yo: vYo };
 function render() {
+  const tb = document.getElementById('tbinfo'); if (tb) tb.innerHTML = TIEMPO ? `${WMO(TIEMPO.code)[1]} ${TIEMPO.t}°` : '';
   const foco = document.activeElement && document.activeElement.id === 'buscar' ? document.activeElement.selectionStart : null;
-  $('app').innerHTML = VISTAS[ui.tab]();
+  $('app').className = 't-' + ui.tab; $('app').innerHTML = VISTAS[ui.tab]();
   document.querySelectorAll('#tabnav button').forEach(b => { const on = b.dataset.tab === ui.tab; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   if (foco != null && $('buscar')) { $('buscar').focus(); $('buscar').setSelectionRange(foco, foco); }
 }
