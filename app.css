@@ -711,3 +711,36 @@ input:focus, textarea:focus { background: var(--bg); }
 @media (min-width: 900px) { #app, .sheet { max-width: 760px; } }
 
 .topbar .marca svg{ width:26px; height:26px; }
+
+/* ===== v28 · estilo cálido (noviembre 2026) =====
+   Como una buena app de moda: crema cálida, tarjetas blancas que flotan con
+   sombra suave, la ropa a lo grande, granate como color de acción y títulos
+   en Fraunces. */
+@font-face { font-family: 'Fraunces'; src: url(fonts/fraunces-600.woff2) format('woff2'); font-weight: 600; font-display: swap; }
+:root {
+  --bg: #fbf5ef; --card: #ffffff; --tile: #ffffff; --fill: #f4e8de; --ink: #2a1c1a; --ink2: #4a3632; --muted: #7d6862; --faint: #9c8680; --line: #f0e2d7;
+  --accent: #a23e48; --accent-soft: #fbe3e5; --accent-ink: #7a2632; --btn: #a23e48; --btn-ink: #ffffff; --paper: #f6ede5; --control: #e0cbbf;
+  --serif: 'Fraunces', 'New York', ui-serif, Georgia, serif;
+  --sh-card: 0 1px 2px rgba(110,50,40,.06), 0 10px 28px rgba(110,50,40,.09); --sh-float: 0 12px 40px rgba(110,50,40,.18);
+  --r: 24px;
+}
+html, body, .topbar, .bottomnav, .sheet { background: var(--bg); }
+.hero h1, .hero.saludo h1, .sheet h2, .sheet .ficha-t { font: 600 34px/1.08 var(--serif); letter-spacing: -.025em; }
+.sheet h2, .sheet .ficha-t { font-size: 28px; }
+.card, .cifras, .stats, .guias, .vacio, .rescata, .atajo { background: var(--card); box-shadow: var(--sh-card); }
+.sheet .card, .card .card { box-shadow: none; background: var(--fill); }
+.costura .look .lk { box-shadow: 0 4px 14px rgba(110,50,40,.12); }
+.prenda > img, .prenda > .nofoto { box-shadow: var(--sh-card); }
+.btn { background: var(--btn); color: var(--btn-ink); box-shadow: 0 6px 18px rgba(162,62,72,.3); }
+.btn.ghost { background: none; box-shadow: none; color: var(--muted); }
+.pill.on { background: var(--ink); color: var(--bg); }
+.pill { background: var(--fill); }
+.cifra.lead b { color: var(--accent); }
+.atajo:nth-child(4n+1) { background: #ffe3d3; } .atajo:nth-child(4n+2) { background: #e6e9ff; }
+.atajo:nth-child(4n+3) { background: #dff3e4; } .atajo:nth-child(4n+4) { background: #fff0c2; }
+.atajo { box-shadow: none; font-weight: 600; }
+.bottomnav { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); max-width: 520px; margin: 0 auto; border: 0; border-radius: 28px; background: var(--card); box-shadow: var(--sh-float); padding: 6px; }
+.bottomnav button.active { color: var(--accent); }
+.bottomnav button.active svg { background: var(--accent-soft); }
+body { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+.bottomnav { transform: none; width: auto; }
