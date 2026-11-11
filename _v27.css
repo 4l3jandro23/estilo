@@ -1,0 +1,106 @@
+
+/* ===== v27 · diseño de familia (noviembre 2026) =====
+   La misma casa que Alimentación y Ejercicio: página blanca, paneles en tono
+   de lino, saludo en Instrument Serif y el resto en Instrument Sans. La ropa
+   pone el color; el verde azulado solo marca datos. Botón principal casi
+   negro. Sin degradados, sin vidrio y sin sombras en lo que está quieto. */
+@font-face { font-family: 'Instrument Sans'; src: url(fonts/instrument-sans.woff2) format('woff2'); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: 'Instrument Serif'; src: url(fonts/instrument-serif.woff2) format('woff2'); font-weight: 400; font-display: swap; }
+
+:root {
+  --bg: #ffffff; --card: #f4f2ee; --tile: #f4f2ee; --fill: #e7e4de; --ink: #1f201d; --ink2: #3a3a36; --muted: #636361; --faint: #7c7b76; --line: #e7e4de;
+  --accent: #1b6e66; --accent-soft: #dcefed; --accent-ink: #0f4a45; --hilo: #b7791f;
+  --brand: #1f201d; --brand-soft: #e7e4de;
+  --ok: #2e7d32; --ok-soft: #e1f1e3; --medio: #92400e; --medio-soft: #fdf1dc; --mal: #b42318; --mal-soft: #fdecea;
+  --btn: #1f201d; --btn-ink: #ffffff; --paper: #efece7; --control: #c9c6bf;
+  --r: 22px; --r2: 16px; --r3: 10px;
+  --font: 'Instrument Sans', -apple-system, 'Segoe UI', Roboto, sans-serif; --serif: 'Instrument Serif', 'New York', ui-serif, Georgia, serif;
+  --denim: var(--brand); --denim-2: #8c9096; --denim-soft: var(--brand-soft); --cuero: #a06a2c; --cuero-soft: #f6ecdf; --paper2: var(--tile);
+  --display: var(--font); --body: var(--font);
+}
+html { background: var(--bg); color-scheme: light; }
+body { font: 400 16px/1.5 var(--font); letter-spacing: 0; color: var(--ink); background: var(--bg); font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+#app { padding: 4px 18px 16px; max-width: 640px; }
+
+/* Barra de arriba */
+.topbar { padding: env(safe-area-inset-top) 18px 0; }
+.topbar .marca { font: 600 16px var(--font); letter-spacing: -.01em; }
+.topbar .marca svg { width: 24px; height: 24px; flex: none; }
+.topbar .info { font-weight: 400; }
+
+/* Cabeceras: el saludo, en serif */
+.hero { padding: 10px 0 16px; }
+.hero h1, .hero.saludo h1 { font: 400 38px/1.04 var(--serif); letter-spacing: -.012em; text-wrap: balance; }
+.hero .sub-h { margin-top: 6px; font-size: 14px; color: var(--muted); }
+.sec { font: 600 20px/1.2 var(--font); letter-spacing: -.015em; margin: 30px 2px 12px; }
+.card { border-radius: var(--r); }
+.card h2, .rescata h2 { font: 600 17px/1.3 var(--font); letter-spacing: -.015em; }
+.sub { font-size: 15px; }
+.puesto, .outfit.completo { box-shadow: none; }
+.cifra { border-left-color: var(--line); }
+.cifra b { font: 400 28px/1 var(--font); letter-spacing: -.02em; }
+.cifra small { font-size: 12px; }
+.cifra.lead b { color: var(--ink); }
+.stats > * { border-left-color: var(--line); }
+.stats b { font: 400 24px/1.1 var(--font); letter-spacing: -.02em; }
+
+/* Botones y fichas */
+.btn { padding: 15px 24px; font-weight: 600; letter-spacing: -.005em; }
+.pill { font-weight: 500; }
+.sheet .card .pill:not(.on) { background: var(--fill); }
+.sheet .pill:not(.on) { background: var(--fill); }
+.tab { font-size: 15px; }
+.tag { color: var(--ink); }
+.tag.bien, .tag.mal, .tag.medio { color: var(--ink); }
+.nota { box-shadow: none; background: var(--card) !important; }
+.card .nota { background: var(--bg) !important; }
+.nota.n2 { background: var(--ok-soft) !important; box-shadow: none; }
+.nota.n1 { background: var(--medio-soft) !important; box-shadow: none; }
+.nota.n0 { background: var(--mal-soft) !important; box-shadow: none; }
+.franja, .plan-o, .carac, .opinion, .nota-p { background: var(--bg); }
+.sheet .franja, .sheet .plan-o, .sheet .carac, .sheet .opinion, .sheet .nota-p { background: var(--card); }
+.seg { background: var(--fill); }
+.seg button.on { background: var(--bg); }
+.mini-seg { background: var(--fill); }
+.dia.hoy small { color: var(--accent); font-weight: 600; }
+.chk span { border-color: var(--control); }
+.bar-b { background: var(--fill); }
+.bar-b i { box-shadow: none; }
+.step .pill { background: var(--fill); }
+.step b { font: 400 28px/1 var(--font); letter-spacing: -.02em; }
+
+/* Fotos y etiquetas sobre las fotos */
+.prenda .badge, .vbadge, .favbtn, .costura .look .lk small, .mes .dd i { background: rgba(255, 255, 255, .92); color: var(--ink); }
+.prenda .fav, .favbtn { color: var(--mal); }
+.mes .dd.hoy i { background: var(--ink); color: var(--bg); }
+.lk.fijo { box-shadow: inset 0 0 0 2px var(--ink); }
+.pick .prenda.sel > img, .pick .prenda.sel > .nofoto { outline: 2px solid var(--ink); outline-offset: -2px; }
+
+/* Hojas */
+.veil { background: rgba(15, 15, 12, .5); }
+.sheet { background: var(--bg); border-radius: 28px 28px 0 0; box-shadow: 0 -8px 40px rgba(20, 20, 15, .18); max-width: 640px; }
+.sheet .card, .sheet .aviso, .sheet .etiqueta { background: var(--card); }
+.sheet h2 { font: 400 30px/1.08 var(--serif); letter-spacing: -.01em; }
+.sheet .ficha-t { font: 400 28px/1.08 var(--serif); letter-spacing: -.01em; }
+.sheet .card h2 { font: 600 17px/1.3 var(--font); letter-spacing: -.015em; }
+.grab { background: var(--control); }
+.acts { background: var(--bg); border-top: 1px solid var(--line); }
+.foto { background: var(--card); border: 2px dashed var(--control); }
+textarea, input { background: var(--bg); border: 1px solid var(--line); font-family: var(--font); }
+.sheet textarea, .sheet input { background: var(--bg); }
+input:focus, textarea:focus { background: var(--bg); }
+.buscar { background: var(--card); border: 0; }
+.toast { box-shadow: 0 8px 30px rgba(20, 20, 15, .2); }
+
+/* Barra de abajo: plana; el destino activo lleva una pastilla gris detrás del icono */
+.bottomnav { max-width: none; background: var(--bg); border-top: 1px solid var(--line); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+.bottomnav button { color: var(--muted); font: 500 11px var(--font); gap: 2px; }
+.bottomnav svg { width: 56px; height: 30px; padding: 4px 17px; border-radius: 15px; box-sizing: border-box; stroke-width: 1.6; }
+.bottomnav button.active { color: var(--ink); font-weight: 600; }
+.bottomnav button.active svg { background: var(--fill); stroke-width: 1.8; }
+.atajo { background: var(--card); font-size: 14px; }
+.rr { border-top-color: var(--line); }
+.mes .dd { background: var(--card); }
+* { text-transform: none !important; }
+.mes-nav b::first-letter { text-transform: uppercase !important; }
+@media (min-width: 900px) { #app, .sheet { max-width: 760px; } }
