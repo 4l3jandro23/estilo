@@ -709,3 +709,5 @@ input:focus, textarea:focus { background: var(--bg); }
 * { text-transform: none !important; }
 .mes-nav b::first-letter { text-transform: uppercase !important; }
 @media (min-width: 900px) { #app, .sheet { max-width: 760px; } }
+
+.topbar .marca svg{ width:26px; height:26px; }
