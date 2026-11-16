@@ -241,10 +241,13 @@ function adjColor(c, g) {
 const catSing = cat => (SING[cat] || [cat || 'Prenda'])[0];
 const nombre = p => p.nombre || (SING[p.cat] ? `${SING[p.cat][0]} ${p.cat === 'Vaqueros' && p.color === 'Vaquero' ? '' : adjColor(p.color, SING[p.cat][1])}`.trim() : 'Prenda');
 const fmtDia = k => new Date(k + 'T12:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+const fmtFecha = k => new Date(k + 'T12:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
 const dias = k => Math.round((new Date(hoyKey() + 'T12:00') - new Date(k + 'T12:00')) / 864e5);
 const haceDias = k => { const n = dias(k); return n === 0 ? 'hoy' : n === 1 ? 'ayer' : `hace ${n} días`; };
 const eur = n => (Math.round(n * 100) / 100).toLocaleString('es-ES', { maximumFractionDigits: 2 }) + ' €';
-const disponible = p => !p.estado;
+const CAJA_REVISAR = '2027-05-01'; // cuándo volver a probarse lo que hoy aprieta
+const enCaja = p => /^A la caja/.test(p.veredicto || '');
+const disponible = p => !p.estado && !enCaja(p);
 
 // ---------- historial y estadísticas ----------
 const usos = p => (p.usos0 || 0) + D.historial.filter(h => h.prendas.includes(p.id)).length;
@@ -303,7 +306,7 @@ function vHoy() {
   const pz = pendientes(), porComprar = D.compras.filter(c => !c.hecho).length;
   const cifras = D.prendas.length ? `<div class="cifras">
       <button class="cifra lead" data-go="armario"><small>Listas para ponerte</small><b>${listas}</b><span>de ${D.prendas.length} prendas</span></button>
-      <button class="cifra" data-act="pendientes"><small>Pendientes</small><b>${pz.total}</b><span>${pz.total ? [pz.sastre.length && `${pz.sastre.length} al sastre`, pz.fuera.length && `${pz.fuera.length} a vender`, pz.decidir.length && `${pz.decidir.length} por decidir`].filter(Boolean).join(' · ') : 'Nada que hacer'}</span></button>
+      <button class="cifra" data-act="pendientes"><small>Pendientes</small><b>${pz.total}</b><span>${pz.total ? [pz.sastre.length && `${pz.sastre.length} al sastre`, pz.fuera.length && `${pz.fuera.length} a vender`, pz.decidir.length && `${pz.decidir.length} por decidir`, pz.caja.length && `${pz.caja.length} en la caja`].filter(Boolean).join(' · ') : 'Nada que hacer'}</span></button>
       <button class="cifra" data-go="armario" data-filtro="lavar"><small>Para lavar</small><b>${cesta.length}</b><span>${cesta.length ? 'No te las propongo' : 'Cesta vacía'}</span></button>
       <button class="cifra" data-go="compras"><small>Por comprar</small><b>${porComprar}</b><span>${porComprar ? 'En tu lista' : 'Lista vacía'}</span></button>
     </div>` : '';
@@ -388,7 +391,11 @@ function pendientes() {
   const decidir = P.filter(p => /^Revisar/.test(p.veredicto || ''));
   const sinFoto = P.filter(p => !FOTOS[p.id]);
   const compra = recoPantalones(P, D.compras).compra.filter(x => !x.enLista);
-  return { sastre, fuera, decidir, sinFoto, compra, total: sastre.length + fuera.length + decidir.length };
+  // La caja (lo que te va estrecho) solo cuenta como pendiente cuando llega su fecha de revisar.
+  const caja = P.filter(enCaja), cajaToca = caja.filter(p => !p.revisar || p.revisar <= hoyKey());
+  const reponer = P.filter(p => /repónla/.test(p.veredicto || ''));
+  const avisos = (D.recordatorios || []).filter(r => !r.hecho), avisosToca = avisos.filter(r => !r.desde || r.desde <= hoyKey());
+  return { sastre, fuera, decidir, sinFoto, compra, caja, reponer, avisos, total: sastre.length + fuera.length + decidir.length + cajaToca.length + avisosToca.length };
 }
 function openPendientes() {
   const v = sheet('');
@@ -397,8 +404,11 @@ function openPendientes() {
     const x = pendientes(), nada = !x.total && !x.sinFoto.length && !x.compra.length;
     v.querySelector('.sheet').innerHTML = `<div class="grab"></div><h2>Pendientes del armario</h2><p class="sub">Lo que toca hacer con tu ropa. Cuando lo hagas, márcalo y sale de aquí.</p>
       ${x.sastre.length ? `<p class="mini">Llevar al sastre · ${x.sastre.length}</p>${x.sastre.map(p => fila(p, p.arreglo || 'Arreglo pendiente', `<button class="pill sm on" data-pz="arreglado:${p.id}">${IC('check', 'xs')} Ya está arreglado</button>`)).join('')}<p class="mini-t">Llévalos todos juntos: sale más barato y vas una sola vez.</p>` : ''}
-      ${x.decidir.length ? `<p class="mini">Por decidir · ${x.decidir.length}</p>${x.decidir.map(p => fila(p, p.sensacion || p.ajuste || '', `<button class="pill sm on" data-pz="quedar:${p.id}">Me lo quedo</button><button class="pill sm" data-pz="fuera:${p.id}">Fuera</button>`)).join('')}` : ''}
+      ${x.decidir.length ? `<p class="mini">Por decidir · ${x.decidir.length}</p>${x.decidir.map(p => fila(p, p.sensacion || p.ajuste || '', `<button class="pill sm on" data-pz="quedar:${p.id}">Me lo quedo</button><button class="pill sm" data-pz="caja:${p.id}">Aprieta: a la caja</button><button class="pill sm" data-pz="fuera:${p.id}">Fuera</button>`)).join('')}` : ''}
       ${x.fuera.length ? `<p class="mini">Vender o regalar · ${x.fuera.length}</p>${x.fuera.map(p => fila(p, [p.tienda, p.talla && 'talla ' + p.talla].filter(Boolean).join(' · '), `<button class="pill sm on" data-pz="vendida:${p.id}">Vendido</button><button class="pill sm" data-pz="donada:${p.id}">Regalado</button>`)).join('')}<p class="mini-t">En Vinted o Wallapop: foto con luz de día, marca, talla y medidas. Lo que no se venda en un mes, a Humana o a un contenedor de ropa.</p>` : ''}
+      ${x.avisos.length ? `<p class="mini">Recordatorios · ${x.avisos.length}</p>${x.avisos.map(r => `<div class="lrow pend"><span class="b"><b>${esc(r.txt)}</b>${r.desde ? `<small>${r.desde <= hoyKey() ? 'Ya toca' : 'A partir del ' + esc(fmtFecha(r.desde))}</small>` : ''}<span class="row"><button class="pill sm on" data-pz="aviso:${esc(r.id)}">${IC('check', 'xs')} Hecho</button></span></span></div>`).join('')}` : ''}
+      ${x.reponer.length ? `<p class="mini">Reponer · ${x.reponer.length}</p>${x.reponer.map(p => fila(p, p.arreglo || 'Está gastada: cómprate otra igual', `<button class="pill sm on" data-pz="repuesta:${p.id}">Ya tengo otra</button>`)).join('')}<p class="mini-t">Cuando tengas la nueva, la vieja pasa a ropa de casa.</p>` : ''}
+      ${x.caja.length ? `<p class="mini">En la caja · ${x.caja.length}</p>${x.caja.map(p => fila(p, p.revisar ? (p.revisar <= hoyKey() ? 'Toca probártela' : 'Probártela a partir del ' + fmtFecha(p.revisar)) : 'Te va estrecha', `<button class="pill sm on" data-pz="quedar:${p.id}">Ya me queda</button><button class="pill sm" data-pz="fuera:${p.id}">Fuera</button>`)).join('')}<p class="mini-t">Guárdalas fuera de la vista. Si en la fecha no te quedan bien, véndelas o regálalas sin pena.</p>` : ''}
       ${x.sinFoto.length ? `<p class="mini">Fotos · ${x.sinFoto.length} sin foto</p><button class="pill" data-pz="fotos:">${IC('camara', 'xs')} Hacer fotos a tu ropa</button>` : ''}
       ${x.compra.length ? `<p class="mini">Te falta comprar · ${x.compra.length}</p>${x.compra.map(c => `<div class="lrow"><span class="b"><b>${esc(c.que)}</b></span></div>`).join('')}<button class="pill" data-pz="compras:">Ver en Compras</button>` : ''}
       ${nada ? '<div class="vacio"><p><b>No tienes nada pendiente.</b></p><p>Todo tu armario está listo para ponerse.</p></div>' : ''}
@@ -410,7 +420,10 @@ function openPendientes() {
     const [acc, id] = b.dataset.pz.split(':'), p = prenda(id);
     if (acc === 'fotos') { v.close(); return openFotosPant(false); }
     if (acc === 'compras') { v.close(); return ir('compras'); }
+    if (acc === 'aviso') { const r = (D.recordatorios || []).find(x => x.id === id); if (r) { r.hecho = hoyKey(); toast('Hecho.'); } save(); paint(); return render(); }
     if (!p) return;
+    if (acc === 'caja') { p.veredicto = 'A la caja: te va estrecha'; p.revisar = p.revisar || CAJA_REVISAR; toast('A la caja. Te avisaré para volver a probártela.'); }
+    if (acc === 'repuesta') { p.veredicto = 'Solo para casa o deporte'; toast('La vieja pasa a ropa de casa.'); }
     if (acc === 'arreglado') { p.veredicto = 'Quédatela'; p.estado = undefined; p.arreglado = hoyKey(); toast('Arreglado: ya cuenta para ponértelo.'); }
     if (acc === 'quedar') { p.veredicto = 'Quédatela'; toast('Te lo quedas.'); }
     if (acc === 'fuera') { p.veredicto = 'Vender'; toast('Pasa a «vender o regalar».'); }
@@ -622,7 +635,7 @@ function openFicha(id) {
       <h2 class="ficha-t">${esc(nombre(p))}</h2>
       <div class="chips tight"><span class="tag">${esc(p.cat)}</span>${p.color ? `<span class="tag">${swatch(p.color)}${esc(p.color)}</span>` : ''}<span class="tag">${esc(p.temp || 'Todo el año')}</span>${p.talla ? `<span class="tag etiq">Talla ${esc(p.talla)}</span>` : ''}${p.tienda ? `<span class="tag">${esc(p.tienda)}</span>` : ''}${p.formalidad ? `<span class="tag">${esc(p.formalidad)}</span>` : ''}</div>
       <div class="stats sm"><div><b>${u}</b><small>${u === 1 ? 'vez' : 'veces'}</small></div><div><b>${ul ? haceDias(ul) : '—'}</b><small>última vez</small></div><div><b>${+p.precio ? eur(+p.precio / Math.max(1, u)) : '—'}</b><small>por puesta</small></div></div>
-      ${p.veredicto || p.consejo ? `<section class="opinion"><p class="mini" style="margin-top:0">Mi opinión</p>${p.veredicto ? `<p class="veredicto-t ${(VER[p.veredicto] || [])[1] || ''}">${(VER[p.veredicto] || [])[2] || ''} ${esc(p.veredicto)}</p>` : ''}${p.consejo ? `<p>${esc(p.consejo)}</p>` : ''}${p.ocasiones ? `<p class="mini-t"><b>Cuándo:</b> ${esc(p.ocasiones)}</p>` : ''}${p.combinar ? `<p class="mini-t"><b>Con qué:</b> ${esc(p.combinar)}</p>` : ''}</section>` : ''}
+      ${p.veredicto || p.consejo ? `<section class="opinion"><p class="mini" style="margin-top:0">Mi opinión</p>${p.veredicto ? `<p class="veredicto-t ${(VER[p.veredicto] || [])[1] || ''}">${(VER[p.veredicto] || [])[2] || ''} ${esc(p.veredicto)}</p>` : ''}${p.consejo ? `<p>${esc(p.consejo)}</p>` : ''}${p.ocasiones ? `<p class="mini-t"><b>Cuándo:</b> ${esc(p.ocasiones)}</p>` : ''}${p.combinar ? `<p class="mini-t"><b>Con qué:</b> ${esc(p.combinar)}</p>` : ''}${enCaja(p) && p.revisar ? `<p class="mini-t"><b>Pruébatela otra vez:</b> a partir del ${esc(fmtFecha(p.revisar))}</p>` : ''}</section>` : ''}
       ${caractHTML(p)}
       ${p.notas ? `<p class="nota-p">${esc(p.notas)}</p>` : ''}
       <p class="mini">Qué hacer con ella</p><div class="chips tight">${VEREDICTOS.map(([v, c, i]) => `<button class="pill sm ${p.veredicto === v ? 'on' : ''}" data-fver="${esc(v)}">${i} ${esc(v)}</button>`).join('')}</div>
@@ -635,7 +648,7 @@ function openFicha(id) {
   v.addEventListener('click', e => {
     const p = prenda(id); if (!p) return;
     if (e.target.closest('[data-ffav]')) { p.fav = !p.fav; save(); paint(); return render(); }
-    const fv = e.target.closest('[data-fver]'); if (fv) { p.veredicto = p.veredicto === fv.dataset.fver ? undefined : fv.dataset.fver; save(); paint(); return render(); }
+    const fv = e.target.closest('[data-fver]'); if (fv) { p.veredicto = p.veredicto === fv.dataset.fver ? undefined : fv.dataset.fver; if (enCaja(p)) p.revisar = p.revisar || CAJA_REVISAR; save(); paint(); return render(); }
     const es = e.target.closest('[data-festado]'); if (es) { p.estado = es.dataset.festado || undefined; save(); ui.looks = []; paint(); return render(); }
     const o = e.target.closest('[data-fotra]'); if (o) { v.close(); return openFicha(o.dataset.fotra); }
     if (e.target.closest('[data-fedit]')) { v.close(); return openPrenda(id); }
@@ -934,7 +947,7 @@ const clickApp = e => {
     const txt = (v, m) => String(v || '').slice(0, m);
     for (const x of o.prendas) {
       if (!x || !CATS.includes(x.cat) || (x.color && !COLORES.includes(x.color))) { mal++; continue; }
-      const nom = txt(x.nombre, 60), extra = { corte: CORTES.includes(x.corte) ? x.corte : '', veredicto: VER[x.veredicto] ? x.veredicto : undefined, consejo: txt(x.consejo, 500), ocasiones: txt(x.ocasiones, 200), combinar: txt(x.combinar, 200), ref: txt(x.ref, 30) };
+      const nom = txt(x.nombre, 60), extra = { corte: CORTES.includes(x.corte) ? x.corte : '', veredicto: VER[x.veredicto] ? x.veredicto : undefined, consejo: txt(x.consejo, 500), ocasiones: txt(x.ocasiones, 200), combinar: txt(x.combinar, 200), ref: txt(x.ref, 30), revisar: /^\d{4}-\d{2}-\d{2}$/.test(x.revisar || '') ? x.revisar : undefined };
       for (const [k, , , max] of CARACT) if (x[k]) extra[k] = txt(x[k], max);
       if (FORMALIDAD.includes(x.formalidad)) extra.formalidad = x.formalidad;
       const ya = D.prendas.find(p => p.cat === x.cat && (p.nombre || '') === nom);
@@ -944,6 +957,14 @@ const clickApp = e => {
         Object.assign(ya, extra); dup++; continue;
       }
       D.prendas.push(Object.assign({ id: uid('p'), nombre: nom, cat: x.cat, color: x.color || '', temp: TEMPS.includes(x.temp) ? x.temp : 'Todo el año', talla: txt(x.talla, 12), tienda: txt(x.tienda, 30), precio: '', notas: txt(x.notas, 120), fecha: new Date().toISOString(), usos0: 0 }, extra)); n++;
+    }
+    // Recordatorios (por ejemplo, sacar la caja de verano): entran en Pendientes; si ya estaban (mismo texto), se actualizan.
+    let nr = 0;
+    for (const x of (Array.isArray(o.recordatorios) ? o.recordatorios : [])) {
+      if (!x || !x.txt) continue; D.recordatorios = D.recordatorios || [];
+      const datos = { txt: txt(x.txt, 140), desde: /^\d{4}-\d{2}-\d{2}$/.test(x.desde || '') ? x.desde : '' };
+      const ya = D.recordatorios.find(r => r.txt === datos.txt);
+      if (ya) Object.assign(ya, datos); else { D.recordatorios.push(Object.assign({ id: uid('r') }, datos)); nr++; }
     }
     // Compras recomendadas: entran en tu lista con el porqué; si ya estaban (mismo nombre), se actualizan.
     let nc = 0, nu = 0;
@@ -956,6 +977,7 @@ const clickApp = e => {
     save(); ui.looks = []; render();
     const partes = [];
     if (n || dup || o.prendas.length) partes.push(`${n} ${n === 1 ? 'prenda añadida' : 'prendas añadidas'}${dup ? ` · ${dup} actualizadas` : ''}${mal ? ` · ${mal} no válidas` : ''}`);
+    if (nr) partes.push(`${nr} ${nr === 1 ? 'recordatorio' : 'recordatorios'} en Pendientes`);
     if (Array.isArray(o.compras)) partes.push(`${nc} ${nc === 1 ? 'compra recomendada' : 'compras recomendadas'} en tu lista${nu ? ` · ${nu} actualizadas` : ''}`);
     return toast(partes.join(' · ') + '.', Array.isArray(o.compras) ? ['Ver', () => ir('compras')] : null);
   }

@@ -99,7 +99,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--ink); backgroun
 .tag.medio { background: var(--medio-soft); color: var(--medio); }
 .tag.etiq { background: var(--cuero-soft); color: var(--cuero); }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
-.d-bien { background: var(--ok); } .d-arreglar { background: var(--hilo); } .d-casa { background: var(--denim-2); } .d-revisar { background: var(--medio); } .d-vender { background: var(--mal); } .d-sin { background: var(--line); }
+.d-bien { background: var(--ok); } .d-arreglar { background: var(--hilo); } .d-casa { background: var(--denim-2); } .d-revisar { background: var(--medio); } .d-vender { background: var(--mal); } .d-sin { background: var(--line); } .d-reponer { background: var(--accent); } .d-caja { background: var(--faint); }
 .est { color: var(--hilo); }
 
 /* Categorías: pestañas de texto, como en una tienda */

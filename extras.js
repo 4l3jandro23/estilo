@@ -9,7 +9,7 @@ ICONOS.maleta = '<rect x="3" y="8" width="18" height="12" rx="3"/><path d="M9 8V
 // Tono de cada categoría, el mismo que en las siluetas (--t-… / --i-… del CSS).
 const TONO_CAT = { 'Camisetas': 'azul', 'Polos': 'azul', 'Camisas': 'lila', 'Sudaderas y jerséis': 'rosa', 'Chaquetas y abrigos': 'ambar', 'Vaqueros': 'denim', 'Pantalones': 'salvia', 'Pantalón corto': 'mar', 'Zapatillas': 'arena', 'Zapatos': 'arena', 'Accesorios': 'ciruela' };
 const tonoDe = c => TONO_CAT[c] || 'gris';
-const sale = p => /^(Vender|Donar|Tirar)/.test(p.veredicto || '');
+const sale = p => /^(Vender|Donar|Tirar|A la caja)/.test(p.veredicto || '');
 
 function barras(filas, tono) {
   const max = Math.max(1, ...filas.map(f => f.n));
